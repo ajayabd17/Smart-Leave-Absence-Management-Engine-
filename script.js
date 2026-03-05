@@ -1,0 +1,118 @@
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab switching logic
+    const navLinks = document.querySelectorAll('.nav-links li');
+    const viewSections = document.querySelectorAll('.view-section');
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            // Ignore if already active
+            if (link.classList.contains('active')) return;
+
+            // Remove active from all tabs
+            navLinks.forEach(item => item.classList.remove('active'));
+            viewSections.forEach(section => section.classList.remove('active'));
+
+            // Set current active
+            link.classList.add('active');
+            
+            // Show target section
+            const targetId = link.getAttribute('data-target');
+            document.getElementById(targetId).classList.add('active');
+        });
+    });
+
+    // Dark mode toggle
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const themeIcon = themeToggleBtn.querySelector('i');
+    
+    // Check initial preference
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        themeIcon.classList.replace('fa-moon', 'fa-sun');
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        let targetTheme = 'light';
+
+        if (currentTheme === 'light' || !currentTheme) {
+            targetTheme = 'dark';
+            themeIcon.classList.replace('fa-moon', 'fa-sun');
+        } else {
+            targetTheme = 'light';
+            themeIcon.classList.replace('fa-sun', 'fa-moon');
+        }
+
+        document.documentElement.setAttribute('data-theme', targetTheme);
+    });
+
+    // Form Submission & Toast
+    const applyLeaveForm = document.getElementById('apply-leave-form');
+    const toast = document.getElementById('toast');
+    const toastMessage = toast.querySelector('.toast-message');
+
+    applyLeaveForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        // Basic validation check
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        
+        if (new Date(startDate) > new Date(endDate)) {
+            showToast('End date cannot be before start date!', 'error');
+            return;
+        }
+
+        // Simulate API call processing
+        showToast('Leave request submitted successfully!', 'success');
+        
+        // Reset form
+        applyLeaveForm.reset();
+    });
+
+    function showToast(message, type = 'success') {
+        toastMessage.textContent = message;
+        
+        if (type === 'error') {
+            toast.style.backgroundColor = '#EF4444'; // Red for error
+            toast.querySelector('i').className = 'fa-solid fa-circle-exclamation';
+        } else {
+            toast.style.backgroundColor = '#10B981'; // Green for success
+            toast.querySelector('i').className = 'fa-solid fa-circle-check';
+        }
+
+        toast.classList.add('show');
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    // Manager Action Buttons Simulate
+    const actionButtons = document.querySelectorAll('.action-buttons .btn');
+    actionButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const listItem = e.target.closest('.approval-item');
+            const isApprove = e.target.closest('.btn-success') !== null;
+            
+            if (isApprove) {
+                showToast('Leave request approved!', 'success');
+            } else {
+                showToast('Leave request rejected', 'error');
+            }
+
+            // Remove item with fade out
+            listItem.style.opacity = '0';
+            setTimeout(() => {
+                listItem.remove();
+                
+                // Update counter mock
+                const counter = document.querySelector('.manager-stats .number-stat');
+                let count = parseInt(counter.textContent);
+                if (count > 0) counter.textContent = count - 1;
+            }, 300);
+        });
+    });
+});
