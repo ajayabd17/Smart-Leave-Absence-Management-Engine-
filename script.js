@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Set current active
             link.classList.add('active');
-            
+
             // Show target section
             const targetId = link.getAttribute('data-target');
             document.getElementById(targetId).classList.add('active');
@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dark mode toggle
     const themeToggleBtn = document.getElementById('theme-toggle');
     const themeIcon = themeToggleBtn.querySelector('i');
-    
+
     // Check initial preference
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
         document.documentElement.setAttribute('data-theme', 'dark');
@@ -48,33 +48,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.documentElement.setAttribute('data-theme', targetTheme);
     });
 
-    // Form Submission & Toast
-    const applyLeaveForm = document.getElementById('apply-leave-form');
+    // Toast
     const toast = document.getElementById('toast');
     const toastMessage = toast.querySelector('.toast-message');
 
-    applyLeaveForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        
-        // Basic validation check
-        const startDate = document.getElementById('start-date').value;
-        const endDate = document.getElementById('end-date').value;
-        
-        if (new Date(startDate) > new Date(endDate)) {
-            showToast('End date cannot be before start date!', 'error');
-            return;
-        }
-
-        // Simulate API call processing
-        showToast('Leave request submitted successfully!', 'success');
-        
-        // Reset form
-        applyLeaveForm.reset();
-    });
-
     function showToast(message, type = 'success') {
         toastMessage.textContent = message;
-        
+
         if (type === 'error') {
             toast.style.backgroundColor = '#EF4444'; // Red for error
             toast.querySelector('i').className = 'fa-solid fa-circle-exclamation';
@@ -84,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         toast.classList.add('show');
-        
+
         setTimeout(() => {
             toast.classList.remove('show');
         }, 3000);
@@ -96,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', (e) => {
             const listItem = e.target.closest('.approval-item');
             const isApprove = e.target.closest('.btn-success') !== null;
-            
+
             if (isApprove) {
                 showToast('Leave request approved!', 'success');
             } else {
@@ -107,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
             listItem.style.opacity = '0';
             setTimeout(() => {
                 listItem.remove();
-                
+
                 // Update counter mock
                 const counter = document.querySelector('.manager-stats .number-stat');
                 let count = parseInt(counter.textContent);

@@ -17,10 +17,7 @@
                 <h2>SmartLeave</h2>
             </div>
             <ul class="nav-links">
-                <li class="active" data-target="employee-view">
-                    <a href="#"><i class="fa-solid fa-user"></i> Employee Dashboard</a>
-                </li>
-                <li data-target="manager-view">
+                <li class="active" data-target="manager-view">
                     <a href="#"><i class="fa-solid fa-users-gear"></i> Manager Dashboard</a>
                 </li>
             </ul>
@@ -47,130 +44,8 @@
                 </div>
             </header>
 
-            <!-- Employee View -->
-            <section id="employee-view" class="view-section active">
-                <div class="page-title">
-                    <h1>Employee Dashboard</h1>
-                    <p>Overview of your leave balances and history.</p>
-                </div>
-
-                <!-- Leave Balances -->
-                <div class="balance-cards">
-                    <div class="card balance-card">
-                        <div class="card-icon blue"><i class="fa-solid fa-umbrella-beach"></i></div>
-                        <div class="card-details">
-                            <h3>Annual Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left">14 <span>Days</span></span>
-                                <span class="total-days">/ 20</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card balance-card">
-                        <div class="card-icon red"><i class="fa-solid fa-briefcase-medical"></i></div>
-                        <div class="card-details">
-                            <h3>Sick Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left">5 <span>Days</span></span>
-                                <span class="total-days">/ 10</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card balance-card">
-                        <div class="card-icon green"><i class="fa-solid fa-house-user"></i></div>
-                        <div class="card-details">
-                            <h3>Casual Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left">3 <span>Days</span></span>
-                                <span class="total-days">/ 5</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Main Grid -->
-                <div class="dashboard-grid">
-                    <!-- Apply Leave Form -->
-                    <div class="card apply-leave-card">
-                        <h2>Apply for Leave</h2>
-                        <form id="apply-leave-form">
-                            <div class="form-group">
-                                <label for="leave-type">Leave Type</label>
-                                <select id="leave-type" required>
-                                    <option value="" disabled selected>Select Type</option>
-                                    <option value="annual">Annual Leave</option>
-                                    <option value="sick">Sick Leave</option>
-                                    <option value="casual">Casual Leave</option>
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group half">
-                                    <label for="start-date">From</label>
-                                    <input type="date" id="start-date" required>
-                                </div>
-                                <div class="form-group half">
-                                    <label for="end-date">To</label>
-                                    <input type="date" id="end-date" required>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="reason">Reason</label>
-                                <textarea id="reason" rows="3" placeholder="Please provide a brief reason..." required></textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Submit Request</button>
-                        </form>
-                    </div>
-
-                    <!-- Leave History -->
-                    <div class="card history-card">
-                        <div class="card-header">
-                            <h2>Leave History</h2>
-                            <button class="btn btn-outline btn-sm">View All</button>
-                        </div>
-                        <div class="table-container">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Type</th>
-                                        <th>Duration</th>
-                                        <th>Reason</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><span class="type-indicator blue"></span> Annual</td>
-                                        <td>Oct 12 - Oct 14</td>
-                                        <td>Family Trip</td>
-                                        <td><span class="status-badge approved">Approved</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><span class="type-indicator green"></span> Casual</td>
-                                        <td>Sep 05</td>
-                                        <td>Personal Work</td>
-                                        <td><span class="status-badge approved">Approved</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><span class="type-indicator red"></span> Sick</td>
-                                        <td>Aug 22 - Aug 23</td>
-                                        <td>Flu</td>
-                                        <td><span class="status-badge pending">Pending</span></td>
-                                    </tr>
-                                    <tr>
-                                        <td><span class="type-indicator red"></span> Sick</td>
-                                        <td>Jul 10</td>
-                                        <td>Migraine</td>
-                                        <td><span class="status-badge rejected">Rejected</span></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <!-- Manager View -->
-            <section id="manager-view" class="view-section">
+            <section id="manager-view" class="view-section active">
                 <div class="page-title">
                     <h1>Manager Dashboard</h1>
                     <p>Manage team absences and approve requests.</p>
