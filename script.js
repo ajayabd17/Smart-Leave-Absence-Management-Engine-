@@ -150,13 +150,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Employee Apply Leave Simulate
+    // Employee Apply Leave API Integration
     const applyLeaveForm = document.getElementById('apply-leave-form');
     if (applyLeaveForm) {
-        applyLeaveForm.addEventListener('submit', (e) => {
+        applyLeaveForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            showToast('Leave request submitted successfully!', 'success');
-            applyLeaveForm.reset();
+
+            // Store original button state to revert later
+            const submitBtn = applyLeaveForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.textContent;
+            submitBtn.textContent = 'Submitting...';
+            submitBtn.disabled = true;
+
+            const leaveType = document.getElementById('leave-type').value.toUpperCase();
+            const startDate = document.getElementById('date-from').value;
+            const endDate = document.getElementById('date-to').value;
+            const reason = document.getElementById('leave-reason').value;
+
+            // Prepare payload matching the API schema
+            const payload = {
+                employee_id: "EMP001", // Hardcoded employee ID for demo purposes
+                leave_type: leaveType,
+                start_date: startDate,
+                end_date: endDate,
+                reason: reason
+            };
+
+            try {
+                // Send POST request to AWS API Gateway
+                const response = await fetch('https://vq8p7y4koa.execute-api.ap-south-1.amazonaws.com/default/applyLeaveLambda', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    showToast('Leave request submitted successfully!', 'success');
+                    applyLeaveForm.reset();
+                } else {
+                    const errorData = await response.json();
+                    showToast(errorData.message || 'Failed to submit request', 'error');
+                }
+            } catch (error) {
+                console.error("Error submitting leave:", error);
+                showToast('An error occurred. Please try again.', 'error');
+            } finally {
+                // Restore button state
+                submitBtn.textContent = originalBtnText;
+                submitBtn.disabled = false;
+            }
         });
     }
 });
