@@ -1,13 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Check Authorization
-    const role = localStorage.getItem('userRole');
-    if (role !== 'manager') {
-        window.location.href = 'index.html'; // Redirect to login
-        return;
-    }
+    // Check Authorization using Cognito Token Check
+    // We restrict access to users having the 'Manager' group or role in Cognito
+    const payload = checkCognitoAuth(['Manager']);
+    if (!payload) return; // checkCognitoAuth handles the redirect to login
 
-    // Set User Profile from demo login (using mock API)
-    const userEmail = localStorage.getItem('userEmail');
+    // Set User Profile from Cognito token data (falling back to mock storage for demo)
+    const userEmail = payload.email || localStorage.getItem('userEmail');
     if (userEmail) {
         window.apiService.getUserProfile(userEmail).then(response => {
             if (response.success && response.data) {
