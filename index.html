@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,8 +9,38 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="style.css" rel="stylesheet">
 </head>
+
 <body>
-    <div class="app-container">
+    <!-- Login Page -->
+    <div id="auth-wrapper" class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-header">
+                <i class="fa-solid fa-leaf logo-icon"></i>
+                <h2>SmartLeave</h2>
+                <p>Sign in to your account</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" placeholder="name@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+                <div class="form-group">
+                    <label for="role">Sign in as</label>
+                    <select id="role" required>
+                        <option value="employee">Employee</option>
+                        <option value="manager">Manager</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" id="app-wrapper" style="display: none;">
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="sidebar-header">
@@ -17,16 +48,23 @@
                 <h2>SmartLeave</h2>
             </div>
             <ul class="nav-links">
-                <li class="active" data-target="manager-view">
+                <li id="nav-employee" data-target="employee-view" style="display: none;">
+                    <a href="#"><i class="fa-solid fa-user"></i> Employee Dashboard</a>
+                </li>
+                <li id="nav-manager" data-target="manager-view" style="display: none;">
                     <a href="#"><i class="fa-solid fa-users-gear"></i> Manager Dashboard</a>
                 </li>
             </ul>
             <div class="user-profile">
-                <img src="https://ui-avatars.com/api/?name=John+Doe&background=0D8ABC&color=fff" alt="User Avatar">
+                <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="User Avatar"
+                    id="user-avatar">
+
                 <div class="user-info">
-                    <h4>John Doe</h4>
-                    <p>Software Engineer</p>
+                    <h4 id="user-name">User Name</h4>
+                    <p id="user-role">Role</p>
                 </div>
+                <button class="icon-btn" id="logout-btn" title="Logout"><i
+                        class="fa-solid fa-right-from-bracket"></i></button>
             </div>
         </nav>
 
@@ -44,8 +82,120 @@
                 </div>
             </header>
 
+            <!-- Employee View -->
+            <section id="employee-view" class="view-section">
+                <div class="page-title">
+                    <h1>Employee Dashboard</h1>
+                    <p>Overview of your leave balances and history.</p>
+                </div>
+
+                <!-- Stats summary -->
+                <div class="balance-cards">
+                    <div class="card balance-card">
+                        <div class="card-icon green"><i class="fa-solid fa-plane"></i></div>
+                        <div class="card-details">
+                            <h3>Annual Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left">12<span>d</span></span>
+                                <span class="total-days">/ 20</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card balance-card">
+                        <div class="card-icon red"><i class="fa-solid fa-briefcase-medical"></i></div>
+                        <div class="card-details">
+                            <h3>Sick Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left">5<span>d</span></span>
+                                <span class="total-days">/ 10</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card balance-card">
+                        <div class="card-icon blue"><i class="fa-solid fa-mug-hot"></i></div>
+                        <div class="card-details">
+                            <h3>Casual Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left">3<span>d</span></span>
+                                <span class="total-days">/ 5</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Apply Leave Form -->
+                    <div class="card apply-card">
+                        <h2>Apply Leave</h2>
+                        <form id="apply-leave-form">
+                            <div class="form-group">
+                                <label for="leave-type">Leave Type</label>
+                                <select id="leave-type" required>
+                                    <option value="Annual">Annual Leave</option>
+                                    <option value="Sick">Sick Leave</option>
+                                    <option value="Casual">Casual Leave</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group half">
+                                    <label for="date-from">From</label>
+                                    <input type="date" id="date-from" required>
+                                </div>
+                                <div class="form-group half">
+                                    <label for="date-to">To</label>
+                                    <input type="date" id="date-to" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="leave-reason">Reason</label>
+                                <textarea id="leave-reason" rows="3" placeholder="Brief reason for leave..."
+                                    required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Application</button>
+                        </form>
+                    </div>
+
+                    <!-- Leave History -->
+                    <div class="card history-card">
+                        <h2>Leave History</h2>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Duration</th>
+                                        <th>Dates</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="type-indicator green"></span> Annual</td>
+                                        <td>2 days</td>
+                                        <td>Oct 15 - Oct 16, 2026</td>
+                                        <td><span class="status-badge approved">Approved</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="type-indicator red"></span> Sick</td>
+                                        <td>1 day</td>
+                                        <td>Sep 05, 2026</td>
+                                        <td><span class="status-badge approved">Approved</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="type-indicator blue"></span> Casual</td>
+                                        <td>3 days</td>
+                                        <td>Aug 20 - Aug 22, 2026</td>
+                                        <td><span class="status-badge rejected">Rejected</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Manager View -->
-            <section id="manager-view" class="view-section active">
+            <section id="manager-view" class="view-section">
                 <div class="page-title">
                     <h1>Manager Dashboard</h1>
                     <p>Manage team absences and approve requests.</p>
@@ -83,7 +233,8 @@
                         <ul class="approval-list">
                             <li class="approval-item">
                                 <div class="requester-info">
-                                    <img src="https://ui-avatars.com/api/?name=Sarah+Smith&background=F39C12&color=fff" alt="Avatar">
+                                    <img src="https://ui-avatars.com/api/?name=Sarah+Smith&background=F39C12&color=fff"
+                                        alt="Avatar">
                                     <div>
                                         <h4>Sarah Smith</h4>
                                         <p>Sick Leave (2 days) • Nov 10 - Nov 11</p>
@@ -96,7 +247,8 @@
                             </li>
                             <li class="approval-item">
                                 <div class="requester-info">
-                                    <img src="https://ui-avatars.com/api/?name=Mike+Johnson&background=9B59B6&color=fff" alt="Avatar">
+                                    <img src="https://ui-avatars.com/api/?name=Mike+Johnson&background=9B59B6&color=fff"
+                                        alt="Avatar">
                                     <div>
                                         <h4>Mike Johnson</h4>
                                         <p>Annual Leave (5 days) • Dec 01 - Dec 05</p>
@@ -109,7 +261,8 @@
                             </li>
                             <li class="approval-item">
                                 <div class="requester-info">
-                                    <img src="https://ui-avatars.com/api/?name=Emily+Davis&background=E74C3C&color=fff" alt="Avatar">
+                                    <img src="https://ui-avatars.com/api/?name=Emily+Davis&background=E74C3C&color=fff"
+                                        alt="Avatar">
                                     <div>
                                         <h4>Emily Davis</h4>
                                         <p>Casual Leave (1 day) • Nov 15</p>
@@ -136,21 +289,50 @@
                                 </div>
                             </div>
                             <div class="calendar-grid">
-                                <div class="day-name">Su</div><div class="day-name">Mo</div><div class="day-name">Tu</div>
-                                <div class="day-name">We</div><div class="day-name">Th</div><div class="day-name">Fr</div><div class="day-name">Sa</div>
+                                <div class="day-name">Su</div>
+                                <div class="day-name">Mo</div>
+                                <div class="day-name">Tu</div>
+                                <div class="day-name">We</div>
+                                <div class="day-name">Th</div>
+                                <div class="day-name">Fr</div>
+                                <div class="day-name">Sa</div>
                                 <!-- Empty starting days -->
-                                <div class="day empty"></div><div class="day empty"></div>
+                                <div class="day empty"></div>
+                                <div class="day empty"></div>
                                 <!-- Dates (mocked) -->
-                                <div class="day">1</div><div class="day">2</div><div class="day">3</div><div class="day">4</div><div class="day weekend">5</div><div class="day weekend">6</div>
-                                <div class="day">7</div><div class="day">8</div><div class="day">9</div>
-                                <div class="day has-leave" title="Sarah Smith (Sick)">10<span class="dot red"></span></div>
-                                <div class="day has-leave" title="Sarah Smith (Sick)">11<span class="dot red"></span></div>
-                                <div class="day weekend">12</div><div class="day weekend">13</div>
+                                <div class="day">1</div>
+                                <div class="day">2</div>
+                                <div class="day">3</div>
+                                <div class="day">4</div>
+                                <div class="day weekend">5</div>
+                                <div class="day weekend">6</div>
+                                <div class="day">7</div>
+                                <div class="day">8</div>
+                                <div class="day">9</div>
+                                <div class="day has-leave" title="Sarah Smith (Sick)">10<span class="dot red"></span>
+                                </div>
+                                <div class="day has-leave" title="Sarah Smith (Sick)">11<span class="dot red"></span>
+                                </div>
+                                <div class="day weekend">12</div>
+                                <div class="day weekend">13</div>
                                 <div class="day">14</div>
-                                <div class="day has-leave" title="Emily Davis (Casual)">15<span class="dot green"></span></div>
-                                <div class="day">16</div><div class="day">17</div><div class="day">18</div><div class="day weekend">19</div><div class="day weekend">20</div>
-                                <div class="day">21</div><div class="day">22</div><div class="day">23</div><div class="day">24</div><div class="day">25</div><div class="day weekend">26</div><div class="day weekend">27</div>
-                                <div class="day">28</div><div class="day">29</div><div class="day">30</div>
+                                <div class="day has-leave" title="Emily Davis (Casual)">15<span
+                                        class="dot green"></span></div>
+                                <div class="day">16</div>
+                                <div class="day">17</div>
+                                <div class="day">18</div>
+                                <div class="day weekend">19</div>
+                                <div class="day weekend">20</div>
+                                <div class="day">21</div>
+                                <div class="day">22</div>
+                                <div class="day">23</div>
+                                <div class="day">24</div>
+                                <div class="day">25</div>
+                                <div class="day weekend">26</div>
+                                <div class="day weekend">27</div>
+                                <div class="day">28</div>
+                                <div class="day">29</div>
+                                <div class="day">30</div>
                             </div>
                             <div class="calendar-legend">
                                 <div><span class="dot red"></span> Sick</div>
@@ -164,8 +346,10 @@
                             <h2>Leave Reports</h2>
                             <p class="text-muted">Download team absence records for HR and payroll processing.</p>
                             <div class="report-actions">
-                                <button class="btn btn-outline"><i class="fa-solid fa-download"></i> Current Month (CSV)</button>
-                                <button class="btn btn-outline"><i class="fa-solid fa-file-pdf"></i> Annual Summary (PDF)</button>
+                                <button class="btn btn-outline"><i class="fa-solid fa-download"></i> Current Month
+                                    (CSV)</button>
+                                <button class="btn btn-outline"><i class="fa-solid fa-file-pdf"></i> Annual Summary
+                                    (PDF)</button>
                             </div>
                         </div>
                     </div>
@@ -184,4 +368,5 @@
 
     <script src="script.js"></script>
 </body>
+
 </html>

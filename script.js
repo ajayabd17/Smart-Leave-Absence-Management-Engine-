@@ -1,4 +1,56 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Auth & Routing
+    const authWrapper = document.getElementById('auth-wrapper');
+    const appWrapper = document.getElementById('app-wrapper');
+    const loginForm = document.getElementById('login-form');
+    const roleSelect = document.getElementById('role');
+    const userRoleText = document.getElementById('user-role');
+    const userNameText = document.getElementById('user-name');
+
+    const navEmployee = document.getElementById('nav-employee');
+    const navManager = document.getElementById('nav-manager');
+    const viewEmployee = document.getElementById('employee-view');
+    const viewManager = document.getElementById('manager-view');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    // Handle Login
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const role = roleSelect.value;
+        userRoleText.textContent = role === 'manager' ? 'HR Manager' : 'Software Engineer';
+        userNameText.textContent = role === 'manager' ? 'Alex Manager' : 'John Employee';
+
+        // Hide auth, show app
+        authWrapper.style.display = 'none';
+        appWrapper.style.display = 'flex';
+
+        // Setup Role UI
+        if (role === 'employee') {
+            navEmployee.style.display = 'block';
+            navManager.style.display = 'none';
+            navEmployee.classList.add('active');
+            navManager.classList.remove('active');
+            viewEmployee.classList.add('active');
+            viewManager.classList.remove('active');
+        } else {
+            navEmployee.style.display = 'none';
+            navManager.style.display = 'block';
+            navManager.classList.add('active');
+            navEmployee.classList.remove('active');
+            viewManager.classList.add('active');
+            viewEmployee.classList.remove('active');
+        }
+    });
+
+    // Handle Logout
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            appWrapper.style.display = 'none';
+            authWrapper.style.display = 'flex';
+            loginForm.reset();
+        });
+    }
+
     // Tab switching logic
     const navLinks = document.querySelectorAll('.nav-links li');
     const viewSections = document.querySelectorAll('.view-section');
@@ -90,9 +142,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Update counter mock
                 const counter = document.querySelector('.manager-stats .number-stat');
-                let count = parseInt(counter.textContent);
-                if (count > 0) counter.textContent = count - 1;
+                if (counter) {
+                    let count = parseInt(counter.textContent);
+                    if (count > 0) counter.textContent = count - 1;
+                }
             }, 300);
         });
     });
+
+    // Employee Apply Leave Simulate
+    const applyLeaveForm = document.getElementById('apply-leave-form');
+    if (applyLeaveForm) {
+        applyLeaveForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            showToast('Leave request submitted successfully!', 'success');
+            applyLeaveForm.reset();
+        });
+    }
 });
