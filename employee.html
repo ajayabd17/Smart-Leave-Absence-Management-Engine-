@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Leave Management - Employee</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="style.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container" id="app-wrapper">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-leaf logo-icon"></i>
+                <h2>SmartLeave</h2>
+            </div>
+            <ul class="nav-links">
+                <li id="nav-employee" class="active">
+                    <a href="employee.html"><i class="fa-solid fa-user"></i> Employee Dashboard</a>
+                </li>
+            </ul>
+            <div class="user-profile">
+                <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="User Avatar"
+                    id="user-avatar">
+
+                <div class="user-info">
+                    <h4 id="user-name">John Employee</h4>
+                    <p id="user-role">Software Engineer</p>
+                </div>
+                <button class="icon-btn" id="logout-btn" title="Logout"><i
+                        class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="search-bar">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Search...">
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn"><i class="fa-regular fa-bell"></i><span class="badge">3</span></button>
+                    <button class="icon-btn theme-toggle" id="theme-toggle"><i class="fa-solid fa-moon"></i></button>
+                </div>
+            </header>
+
+            <!-- Employee View -->
+            <section id="employee-view" class="view-section active" style="display: block;">
+                <div class="page-title">
+                    <h1>Employee Dashboard</h1>
+                    <p>Overview of your leave balances and history.</p>
+                </div>
+
+                <!-- Stats summary -->
+                <div class="balance-cards">
+                    <div class="card balance-card">
+                        <div class="card-icon green"><i class="fa-solid fa-plane"></i></div>
+                        <div class="card-details">
+                            <h3>Annual Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left" id="annual-used">-<span>d</span></span>
+                                <span class="total-days" id="annual-total">/ -</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card balance-card">
+                        <div class="card-icon red"><i class="fa-solid fa-briefcase-medical"></i></div>
+                        <div class="card-details">
+                            <h3>Sick Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left" id="sick-used">-<span>d</span></span>
+                                <span class="total-days" id="sick-total">/ -</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card balance-card">
+                        <div class="card-icon blue"><i class="fa-solid fa-mug-hot"></i></div>
+                        <div class="card-details">
+                            <h3>Casual Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left" id="casual-used">-<span>d</span></span>
+                                <span class="total-days" id="casual-total">/ -</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <!-- Apply Leave Form -->
+                    <div class="card apply-card">
+                        <h2>Apply Leave</h2>
+                        <form id="apply-leave-form">
+                            <div class="form-group">
+                                <label for="leave-type">Leave Type</label>
+                                <select id="leave-type" required>
+                                    <option value="Annual">Annual Leave</option>
+                                    <option value="Sick">Sick Leave</option>
+                                    <option value="Casual">Casual Leave</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group half">
+                                    <label for="date-from">From</label>
+                                    <input type="date" id="date-from" required>
+                                </div>
+                                <div class="form-group half">
+                                    <label for="date-to">To</label>
+                                    <input type="date" id="date-to" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="leave-reason">Reason</label>
+                                <textarea id="leave-reason" rows="3" placeholder="Brief reason for leave..."
+                                    required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Application</button>
+                        </form>
+                    </div>
+
+                    <!-- Leave History -->
+                    <div class="card history-card">
+                        <h2>Leave History</h2>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Duration</th>
+                                        <th>Dates</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leave-history-body">
+                                    <!-- Populated dynamically via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast">
+        <div class="toast-content">
+            <i class="fa-solid fa-circle-check"></i>
+            <span class="toast-message">Success!</span>
+        </div>
+    </div>
+
+    <script src="data-mock.js"></script>
+    <script src="common.js"></script>
+    <script src="employee.js"></script>
+</body>
+
+</html>
