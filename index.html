@@ -38,6 +38,30 @@
                 <button type="submit" class="btn btn-primary">Sign In</button>
             </form>
         </div>
+
+        <!-- NEW PASSWORD REQUIRED CARD (Hidden by default) -->
+        <div class="auth-card" id="change-password-card" style="display: none;">
+            <div class="auth-header">
+                <i class="fa-solid fa-key logo-icon" style="color: #F59E0B;"></i>
+                <h2>Change Password</h2>
+                <p>Please choose a new permanent password.</p>
+            </div>
+            <form id="change-password-form">
+                <div class="form-group">
+                    <label for="new-password">New Password</label>
+                    <input type="password" id="new-password" placeholder="Enter new password" required>
+                    <small style="color: gray; font-size: 0.75rem; margin-top: 5px; display: block;">
+                        Must be at least 8 characters, with numbers and symbols.
+                    </small>
+                </div>
+                <!-- We store the temporary session string here invisibly -->
+                <input type="hidden" id="cognito-session-token">
+                <input type="hidden" id="cognito-username">
+                
+                <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Set Password & Sign In</button>
+                <button type="button" class="btn btn-outline" id="cancel-change-btn" style="width: 100%; margin-top: 10px;">Cancel</button>
+            </form>
+        </div>
     </div>
 
     <!-- Notification Toast -->
@@ -48,6 +72,9 @@
         </div>
     </div>
 
+    <!-- Use AWS SDK v2 which is 100% stable in all browsers without bundlers -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1400.0.min.js"></script>
+    <script src="common.js"></script>
     <script src="login.js"></script>
 
 </body>

@@ -164,6 +164,33 @@
                                     (PDF)</button>
                             </div>
                         </div>
+
+                        <!-- HR Admin Controls (Hidden by Default) -->
+                        <div class="card admin-card" id="hr-admin-section" style="display: none; border-top: 4px solid var(--primary-color);">
+                            <h2><i class="fa-solid fa-user-shield"></i> HR Admin Controls</h2>
+                            <p class="text-muted">Update employee leave quotas.</p>
+                            <form id="quota-update-form" style="margin-top: 15px;">
+                                <div class="form-group">
+                                    <label for="quota-emp-id">Employee ID</label>
+                                    <input type="text" id="quota-emp-id" placeholder="e.g. EMP001" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group half">
+                                        <label for="quota-leave-type">Leave Type</label>
+                                        <select id="quota-leave-type" required>
+                                            <option value="Annual">Annual</option>
+                                            <option value="Sick">Sick</option>
+                                            <option value="Casual">Casual</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group half">
+                                        <label for="quota-new-value">New Quota</label>
+                                        <input type="number" id="quota-new-value" min="0" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">Update Quota</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </section>

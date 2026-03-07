@@ -1,3 +1,64 @@
+// --- AWS API Configuration ---
+// Update this to your real AWS API Gateway URL when available
+const API_BASE_URL = 'https://ivktwzvx88.execute-api.ap-south-1.amazonaws.com';
+
+/**
+ * Reusable helper method to make all calls to AWS Serverless API.
+ * Automatically injects the Cognito JWT token into headers and handles status codes.
+ * @param {string} endpoint 
+ * @param {string} method 
+ * @param {object|null} body 
+ */
+async function apiRequest(endpoint, method = 'GET', body = null) {
+    const token = localStorage.getItem('idToken');
+
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    } else {
+        console.warn('No authentication token found! API request may fail.');
+    }
+
+    const config = {
+        method: method,
+        headers: headers
+    };
+
+    if (body) {
+        config.body = JSON.stringify(body);
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+
+        // Handle specific error codes gracefully
+        if (response.status === 401) {
+            showToast('Session expired. Please log in again.', 'error');
+            localStorage.removeItem('idToken');
+            setTimeout(() => window.location.href = 'index.html', 1500);
+            throw new Error('Unauthorized');
+        }
+
+        if (response.status === 403) {
+            showToast('You do not have permission to perform this action.', 'error');
+            throw new Error('Forbidden');
+        }
+
+        if (response.status >= 500) {
+            showToast('Server error occurred. Please try again later.', 'error');
+            throw new Error('Server Error');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API Request Error:', error);
+        throw error;
+    }
+}
+
 // Global helper for toast notifications
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
@@ -32,7 +93,7 @@ function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         }).join(''));
 
@@ -50,7 +111,7 @@ function parseJwt(token) {
 function checkCognitoAuth(allowedGroups) {
     // 1. Get the Cognito IdToken from localStorage
     const token = localStorage.getItem('idToken');
-    
+
     if (!token) {
         console.warn('No token found, redirecting to login');
         window.location.href = 'index.html';
@@ -87,7 +148,7 @@ function checkCognitoAuth(allowedGroups) {
 
     if (!hasGroupAccess && !hasCustomRoleAccess) {
         console.error('Unauthorized: User does not have access to this page');
-        window.location.href = 'index.html'; 
+        window.location.href = 'index.html';
         return false;
     }
 

@@ -4,62 +4,71 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = checkCognitoAuth(['Employee']);
     if (!payload) return; // checkCognitoAuth handles the redirect to login
 
-    // Set User Profile from Cognito token data (falling back to mock storage for demo)
+    // Set User Profile from Cognito token data
     const userEmail = payload.email || localStorage.getItem('userEmail');
     if (userEmail) {
-        window.apiService.getUserProfile(userEmail).then(response => {
-            if (response.success && response.data) {
-                document.getElementById('user-name').textContent = response.data.name;
-                document.getElementById('user-role').textContent = response.data.role;
-
-                // Fetch basic data after user is loaded
-                loadEmployeeData(response.data.id);
-            }
-        });
+        document.getElementById('user-name').textContent = userEmail.split('@')[0];
+        document.getElementById('user-role').textContent = localStorage.getItem('role') || 'Employee';
+        
+        // Fetch basic data after user is loaded
+        loadEmployeeData();
     }
 
     // Function to load dashboard data
-    function loadEmployeeData(employeeId) {
+    function loadEmployeeData() {
         // Load Balances
-        window.apiService.getBalances(employeeId).then(response => {
-            if (response.success && response.data) {
-                const balances = response.data;
-                document.getElementById('annual-used').innerHTML = `${balances.annual.used}<span>d</span>`;
-                document.getElementById('annual-total').innerHTML = `/ ${balances.annual.total}`;
+        apiRequest('/leave/balance').then(data => {
+            if (data) {
+                // Assuming data returns { annual: { used, total }, sick: ... } 
+                // Adjust this mapping if backend returns differently
+                document.getElementById('annual-used').innerHTML = `${data.annual?.used || 0}<span>d</span>`;
+                document.getElementById('annual-total').innerHTML = `/ ${data.annual?.total || 0}`;
 
-                document.getElementById('sick-used').innerHTML = `${balances.sick.used}<span>d</span>`;
-                document.getElementById('sick-total').innerHTML = `/ ${balances.sick.total}`;
+                document.getElementById('sick-used').innerHTML = `${data.sick?.used || 0}<span>d</span>`;
+                document.getElementById('sick-total').innerHTML = `/ ${data.sick?.total || 0}`;
 
-                document.getElementById('casual-used').innerHTML = `${balances.casual.used}<span>d</span>`;
-                document.getElementById('casual-total').innerHTML = `/ ${balances.casual.total}`;
+                document.getElementById('casual-used').innerHTML = `${data.casual?.used || 0}<span>d</span>`;
+                document.getElementById('casual-total').innerHTML = `/ ${data.casual?.total || 0}`;
             }
-        });
+        }).catch(err => console.error("Balance Load Error", err));
 
         // Load History
-        window.apiService.getHistory(employeeId).then(response => {
-            if (response.success && response.data) {
+        apiRequest('/leave/history').then(data => {
+            if (data && Array.isArray(data)) {
                 const historyBody = document.getElementById('leave-history-body');
                 historyBody.innerHTML = ''; // Clear existing
 
-                response.data.forEach(record => {
-                    // Determine color classes
-                    let typeColor = 'blue';
-                    if (record.type === 'Annual') typeColor = 'green';
-                    if (record.type === 'Sick') typeColor = 'red';
+                if (data.length === 0) {
+                    historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No leave history found.</td></tr>';
+                    return;
+                }
 
-                    let statusClass = record.status === 'Approved' ? 'approved' : 'rejected';
+                data.forEach(record => {
+                    // Normalize status text for CSS classes
+                    const statusStr = (record.status || '').toUpperCase();
+                    let statusClass = 'pending';
+                    if (statusStr === 'APPROVED') statusClass = 'approved';
+                    if (statusStr === 'REJECTED') statusClass = 'rejected';
+
+                    // Determine color classes
+                    const typeStr = (record.leave_type || '').toUpperCase();
+                    let typeColor = 'blue'; // casual default
+                    if (typeStr.includes('ANNUAL')) typeColor = 'green';
+                    if (typeStr.includes('SICK')) typeColor = 'red';
 
                     const tr = document.createElement('tr');
+                    
+                    // The backend returns start_date, end_date, leave_type, status
                     tr.innerHTML = `
-                        <td><span class="type-indicator ${typeColor}"></span> ${record.type}</td>
-                        <td>${record.duration} day${record.duration > 1 ? 's' : ''}</td>
-                        <td>${record.dates}</td>
+                        <td><span class="type-indicator ${typeColor}"></span> ${record.leave_type || 'Unknown'}</td>
+                        <td>${record.start_date} to ${record.end_date}</td>
+                        <td>${record.start_date}</td>
                         <td><span class="status-badge ${statusClass}">${record.status}</span></td>
                     `;
                     historyBody.appendChild(tr);
                 });
             }
-        });
+        }).catch(err => console.error("History Load Error", err));
     }
 
     // Employee Apply Leave API Integration
@@ -81,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Prepare payload matching the API schema
             const payload = {
-                employee_id: "EMP001", // Hardcoded employee ID for demo purposes
                 leave_type: leaveType,
                 start_date: startDate,
                 end_date: endDate,
@@ -89,25 +97,16 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             try {
-                // Send POST request to AWS API Gateway
-                const response = await fetch('https://vq8p7y4koa.execute-api.ap-south-1.amazonaws.com/default/applyLeaveLambda', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (response.ok) {
-                    showToast('Leave request submitted successfully!', 'success');
-                    applyLeaveForm.reset();
-                } else {
-                    const errorData = await response.json();
-                    showToast(errorData.message || 'Failed to submit request', 'error');
-                }
+                // Send POST request to generic API gateway via apiRequest helper
+                const responseData = await apiRequest('/leave/apply', 'POST', payload);
+                showToast('Leave request submitted successfully!', 'success');
+                applyLeaveForm.reset();
+                
+                // Refresh data to show pending status
+                loadEmployeeData();
             } catch (error) {
                 console.error("Error submitting leave:", error);
-                showToast('An error occurred. Please try again.', 'error');
+                // apiRequest helper handles the toast error message internally.
             } finally {
                 // Restore button state
                 submitBtn.textContent = originalBtnText;

@@ -1,130 +1,127 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Check Authorization using Cognito Token Check
-    // We restrict access to users having the 'Manager' group or role in Cognito
-    const payload = checkCognitoAuth(['Manager']);
+    // We restrict access to users having the 'Manager' or 'HR_Admin' group in Cognito
+    const payload = checkCognitoAuth(['Manager', 'HR_Admin']);
     if (!payload) return; // checkCognitoAuth handles the redirect to login
 
-    // Set User Profile from Cognito token data (falling back to mock storage for demo)
+    // Set User Profile from Cognito token data
     const userEmail = payload.email || localStorage.getItem('userEmail');
     if (userEmail) {
-        window.apiService.getUserProfile(userEmail).then(response => {
-            if (response.success && response.data) {
-                document.getElementById('user-name').textContent = response.data.name;
-                document.getElementById('user-role').textContent = response.data.role;
+        document.getElementById('user-name').textContent = userEmail.split('@')[0];
+        document.getElementById('user-role').textContent = localStorage.getItem('role') || 'Manager';
+        
+        // Fetch basic data after user is loaded
+        loadManagerData();
+    }
 
-                // Fetch basic data after user is loaded
-                loadManagerData();
-            }
-        });
+    // HR Admin Check
+    const userRole = localStorage.getItem('role');
+    if (userRole === 'HR_Admin') {
+        const HRSection = document.getElementById('hr-admin-section');
+        if (HRSection) HRSection.style.display = 'block';
     }
 
     // Function to load dashboard data
     function loadManagerData() {
-        // Load Stats
-        window.apiService.getManagerStats().then(response => {
-            if (response.success && response.data) {
-                const stats = response.data;
-                document.getElementById('stat-pending').textContent = stats.pendingApprovals;
-                document.getElementById('stat-out').textContent = stats.teamOutToday;
-                document.getElementById('stat-total').textContent = stats.totalRequestsMonth;
+        // Load Stats (Optional based on your backend, keeping generic structure if it exists)
+        apiRequest('/leave/pending').then(data => {
+            // Count array length of pending items natively if no specific stat endpoint exists
+            if (data && Array.isArray(data)) {
+                 document.getElementById('stat-pending').textContent = data.length;
+                 // Dummy data for missing endpoints as they were not in the requirement doc list:
+                 document.getElementById('stat-out').textContent = '2'; 
+                 document.getElementById('stat-total').textContent = '14'; 
             }
+        }).catch(() => {
+            document.getElementById('stat-pending').textContent = '0';
         });
 
         // Load Pending Approvals
-        window.apiService.getPendingApprovals().then(response => {
-            if (response.success && response.data) {
+        apiRequest('/leave/pending').then(data => {
+            if (data && Array.isArray(data)) {
                 const listContainer = document.getElementById('approval-list-container');
                 listContainer.innerHTML = ''; // Clear existing
 
-                response.data.forEach(req => {
+                if (data.length === 0) {
+                    listContainer.innerHTML = '<li style="padding:20px; text-align:center;">No pending approvals.</li>';
+                    return;
+                }
+
+                data.forEach(req => {
                     const li = document.createElement('li');
                     li.className = 'approval-item';
+                    
+                    // Backend returns: employee_id, leave_type, start_date, end_date, total_days, status
                     li.innerHTML = `
-                        <div class="requester-info">
-                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(req.employeeName)}&background=${req.avatarColor}&color=fff" alt="Avatar">
+                         <div class="requester-info">
+                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(req.employee_id || 'User')}&background=0D8ABC&color=fff" alt="Avatar">
                             <div>
-                                <h4>${req.employeeName}</h4>
-                                <p>${req.type} Leave (${req.duration} day${req.duration > 1 ? 's' : ''}) • ${req.dates}</p>
+                                <h4>${req.employee_id}</h4>
+                                <p>${req.leave_type} (${req.total_days} day${req.total_days > 1 ? 's' : ''}) • ${req.start_date} to ${req.end_date}</p>
                             </div>
                         </div>
                         <div class="action-buttons" data-id="${req.id}">
-                            <button class="btn btn-success btn-icon"><i class="fa-solid fa-check"></i></button>
-                            <button class="btn btn-danger btn-icon"><i class="fa-solid fa-xmark"></i></button>
+                            <!-- Approvals via email for backend, so buttons just show message or hide -->
+                            <p style="font-size: 0.8em; color: gray;">Action in Email</p>
                         </div>
                     `;
                     listContainer.appendChild(li);
                 });
-
-                // Re-bind action button events to newly created DOM elements
-                bindActionButtons();
             }
-        });
+        }).catch(err => console.error("Pending Load Error", err));
 
         // Load Calendar Data
-        window.apiService.getCalendarData().then(response => {
-            if (response.success && response.data) {
-                response.data.forEach(leave => {
-                    const dayElement = document.getElementById(`cal-day-${leave.day}`);
-                    if (dayElement) {
-                        dayElement.classList.add('has-leave');
-                        dayElement.setAttribute('title', `${leave.name} (${leave.type})`);
+        apiRequest('/leave/calendar').then(data => {
+            if (data && Array.isArray(data)) {
+                data.forEach(leave => {
+                    // Extracting day logic - simplistic example, modify based on exact backend ISO format
+                    const dayMatch = leave.start_date ? new Date(leave.start_date).getDate() : null;
+                    
+                    if (dayMatch) {
+                        const dayElement = document.getElementById(`cal-day-${dayMatch}`);
+                        if (dayElement) {
+                            dayElement.classList.add('has-leave');
+                            dayElement.setAttribute('title', `${leave.employee_id} (${leave.leave_type})`);
 
-                        let dotColor = 'blue'; // Annual default
-                        if (leave.type === 'Sick') dotColor = 'red';
-                        if (leave.type === 'Casual') dotColor = 'green';
+                            let dotColor = 'blue'; // Annual default
+                            if (leave.leave_type && leave.leave_type.toUpperCase() === 'SICK') dotColor = 'red';
+                            if (leave.leave_type && leave.leave_type.toUpperCase() === 'CASUAL') dotColor = 'green';
 
-                        dayElement.innerHTML = `${leave.day}<span class="dot ${dotColor}"></span>`;
+                            dayElement.innerHTML = `${dayMatch}<span class="dot ${dotColor}"></span>`;
+                        }
                     }
                 });
             }
-        });
+        }).catch(err => console.error("Calendar Load Error", err));
     }
 
-    // Manager Action Buttons Simulate
-    function bindActionButtons() {
-        const actionButtons = document.querySelectorAll('.action-buttons .btn');
-        actionButtons.forEach(btn => {
-            // Remove old listener if exists to prevent duplicates
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
+    // HR Admin Quota Form Integration
+    const quotaForm = document.getElementById('quota-update-form');
+    if (quotaForm) {
+        quotaForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-            newBtn.addEventListener('click', async (e) => {
-                const actionContainer = e.target.closest('.action-buttons');
-                const requestId = actionContainer.getAttribute('data-id');
-                const listItem = e.target.closest('.approval-item');
-                const isApprove = e.target.closest('.btn-success') !== null;
-                const actionStr = isApprove ? 'approv' : 'reject';
+            const submitBtn = quotaForm.querySelector('button[type="submit"]');
+            const ogText = submitBtn.textContent;
+            submitBtn.textContent = 'Updating...';
+            submitBtn.disabled = true;
 
-                // Change button state
-                const originalHtml = newBtn.innerHTML;
-                newBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                newBtn.disabled = true;
+            const payload = {
+                employee_id: document.getElementById('quota-emp-id').value,
+                leave_type: document.getElementById('quota-leave-type').value.toUpperCase(),
+                new_quota: parseInt(document.getElementById('quota-new-value').value)
+            };
 
-                try {
-                    const response = await window.apiService.processLeaveRequest(requestId, actionStr);
-
-                    if (response.success) {
-                        showToast(`Leave request ${actionStr}ed successfully!`, 'success');
-
-                        // Remove item with fade out
-                        listItem.style.opacity = '0';
-                        setTimeout(() => {
-                            listItem.remove();
-
-                            // Update counter mock
-                            const counter = document.getElementById('stat-pending');
-                            if (counter && counter.textContent !== '-') {
-                                let count = parseInt(counter.textContent);
-                                if (count > 0) counter.textContent = count - 1;
-                            }
-                        }, 300);
-                    }
-                } catch (error) {
-                    showToast('Action failed', 'error');
-                    newBtn.innerHTML = originalHtml;
-                    newBtn.disabled = false;
-                }
-            });
+            try {
+                await apiRequest('/leave/quota/update', 'PUT', payload);
+                showToast('Quota updated successfully!', 'success');
+                quotaForm.reset();
+            } catch (error) {
+                 // apiRequest handles toast UI on error automatically
+            } finally {
+                submitBtn.textContent = ogText;
+                submitBtn.disabled = false;
+            }
         });
     }
 });
