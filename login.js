@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // 3. Send Request to AWS Cognito
-        cognitoidentityserviceprovider.initiateAuth(params, function(err, data) {
+        cognitoidentityserviceprovider.initiateAuth(params, function (err, data) {
             if (err) {
                 console.error('Login failed:', err);
                 showToast(err.message || 'Login failed Check Credentials', 'error');
@@ -53,11 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // 3. Handle Cognito Challenges (NEW_PASSWORD_REQUIRED)
             if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
                 showToast(`Action Required: Please set a permanent password.`, 'error');
-                
+
                 // Switch UI to Change Password Mode
                 loginCard.style.display = 'none';
                 changePwdCard.style.display = 'block';
-                
+
                 // Store required details for the next API call
                 sessionTokenInput.value = data.Session;
                 usernameInput.value = email;
@@ -66,11 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 submitBtn.disabled = false;
                 return;
             } else if (data.ChallengeName) {
-                 console.warn("Unhandled Cognito Login Challenge:", data.ChallengeName);
-                 showToast(`Unhandled challenge: ${data.ChallengeName}. Check AWS.`, 'error');
-                 submitBtn.innerHTML = originalText;
-                 submitBtn.disabled = false;
-                 return;
+                console.warn("Unhandled Cognito Login Challenge:", data.ChallengeName);
+                showToast(`Unhandled challenge: ${data.ChallengeName}. Check AWS.`, 'error');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                return;
             }
 
             // 5. Extract and Validate the Token
@@ -91,12 +91,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = parseJwt(idToken); // Helper in common.js
             const userGroups = payload['cognito:groups'] || [];
             const selectedRole = roleSelect.value.toLowerCase(); // 'employee', 'manager', or 'hr_admin'
-            
+
             let assignedRole = null;
 
-            if (selectedRole === 'hr_admin' && userGroups.includes('HR_Admin')) {
+            if (selectedRole === 'hr_admin' && (userGroups.includes('HR_Admin') || userGroups.includes('hr_admin') || userGroups.includes('hr admin') || userGroups.includes('HR Admin'))) {
                 assignedRole = 'HR_Admin';
-                window.location.href = 'manager.html';
+                window.location.href = 'hr-admin.html';
             } else if (selectedRole === 'manager' && userGroups.includes('Manager')) {
                 assignedRole = 'Manager';
                 window.location.href = 'manager.html';
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('You are not authorized for this role.', 'error');
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
-                
+
                 // Remove tokens since login was rejected
                 localStorage.removeItem('idToken');
                 localStorage.removeItem('userEmail');
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle AWS Cognito Change Password Submission
     changePwdForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        
+
         const newPassword = newPasswordInput.value;
         const session = sessionTokenInput.value;
         const username = usernameInput.value;
@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Session: session
         };
 
-        cognitoidentityserviceprovider.respondToAuthChallenge(challengeParams, function(err, data) {
+        cognitoidentityserviceprovider.respondToAuthChallenge(challengeParams, function (err, data) {
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
 
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // If successful, AWS usually returns the AuthenticationResult directly!
             if (data.AuthenticationResult && data.AuthenticationResult.IdToken) {
                 showToast("Password updated successfully! Logging you in...", "success");
-                
+
                 const idToken = data.AuthenticationResult.IdToken;
                 localStorage.setItem('idToken', idToken);
                 localStorage.setItem('userEmail', username);
@@ -165,12 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const payload = parseJwt(idToken);
                 const userGroups = payload['cognito:groups'] || [];
                 const selectedRole = roleSelect.value.toLowerCase();
-                
+
                 let assignedRole = null;
 
-                if (selectedRole === 'hr_admin' && userGroups.includes('HR_Admin')) {
+                if (selectedRole === 'hr_admin' && (userGroups.includes('HR_Admin') || userGroups.includes('hr_admin') || userGroups.includes('hr admin') || userGroups.includes('HR Admin'))) {
                     assignedRole = 'HR_Admin';
-                    window.location.href = 'manager.html';
+                    window.location.href = 'hr-admin.html';
                 } else if (selectedRole === 'manager' && userGroups.includes('Manager')) {
                     assignedRole = 'Manager';
                     window.location.href = 'manager.html';
