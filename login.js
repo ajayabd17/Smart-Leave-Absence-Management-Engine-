@@ -87,25 +87,30 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('idToken', idToken);
             localStorage.setItem('userEmail', email);
 
-            // 7. Decode token and redirect
+            // 7. Decode token and validate against dropdown role
             const payload = parseJwt(idToken); // Helper in common.js
             const userGroups = payload['cognito:groups'] || [];
-
+            const selectedRole = roleSelect.value.toLowerCase(); // 'employee', 'manager', or 'hr_admin'
+            
             let assignedRole = null;
 
-            if (userGroups.includes('HR_Admin')) {
+            if (selectedRole === 'hr_admin' && userGroups.includes('HR_Admin')) {
                 assignedRole = 'HR_Admin';
                 window.location.href = 'manager.html';
-            } else if (userGroups.includes('Manager')) {
+            } else if (selectedRole === 'manager' && userGroups.includes('Manager')) {
                 assignedRole = 'Manager';
                 window.location.href = 'manager.html';
-            } else if (userGroups.includes('Employee')) {
+            } else if (selectedRole === 'employee' && userGroups.includes('Employee')) {
                 assignedRole = 'Employee';
                 window.location.href = 'employee.html';
             } else {
-                showToast('Unauthorized Role: No valid group assigned.', 'error');
+                showToast('You are not authorized for this role.', 'error');
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
+                
+                // Remove tokens since login was rejected
+                localStorage.removeItem('idToken');
+                localStorage.removeItem('userEmail');
                 return;
             }
 
@@ -156,22 +161,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('idToken', idToken);
                 localStorage.setItem('userEmail', username);
 
-                // Decode token and redirect
+                // Decode token and validate against dropdown role
                 const payload = parseJwt(idToken);
                 const userGroups = payload['cognito:groups'] || [];
+                const selectedRole = roleSelect.value.toLowerCase();
+                
                 let assignedRole = null;
 
-                if (userGroups.includes('HR_Admin')) {
+                if (selectedRole === 'hr_admin' && userGroups.includes('HR_Admin')) {
                     assignedRole = 'HR_Admin';
                     window.location.href = 'manager.html';
-                } else if (userGroups.includes('Manager')) {
+                } else if (selectedRole === 'manager' && userGroups.includes('Manager')) {
                     assignedRole = 'Manager';
                     window.location.href = 'manager.html';
-                } else if (userGroups.includes('Employee')) {
+                } else if (selectedRole === 'employee' && userGroups.includes('Employee')) {
                     assignedRole = 'Employee';
                     window.location.href = 'employee.html';
                 } else {
-                    showToast('Password changed, but you have no valid groups assigned.', 'error');
+                    showToast('Password changed, but you are not authorized for the selected role.', 'error');
+                    localStorage.removeItem('idToken');
+                    localStorage.removeItem('userEmail');
                 }
 
                 if (assignedRole) {

@@ -97,8 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             try {
-                // Send POST request to generic API gateway via apiRequest helper
-                const responseData = await apiRequest('/leave/apply', 'POST', payload);
+                // Send POST request to API gateway via apiRequest helper
+                const responseData = await apiRequest('/leave/request', 'POST', payload);
                 showToast('Leave request submitted successfully!', 'success');
                 applyLeaveForm.reset();
                 

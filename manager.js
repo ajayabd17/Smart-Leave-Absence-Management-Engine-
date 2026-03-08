@@ -61,14 +61,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                         <div class="action-buttons" data-id="${req.id}">
-                            <!-- Approvals via email for backend, so buttons just show message or hide -->
-                            <p style="font-size: 0.8em; color: gray;">Action in Email</p>
+                            <button class="btn btn-primary approve-btn" data-id="${req.id}" style="padding: 5px 10px; font-size: 0.8rem; margin-right: 5px;">Approve</button>
+                            <button class="btn btn-outline hover-red reject-btn" data-id="${req.id}" style="padding: 5px 10px; font-size: 0.8rem;">Reject</button>
                         </div>
                     `;
                     listContainer.appendChild(li);
                 });
+
+                // Attach Event Listeners to the new buttons
+                document.querySelectorAll('.approve-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => handleManagerDecision(e.target.getAttribute('data-id'), 'Approve'));
+                });
+                document.querySelectorAll('.reject-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => handleManagerDecision(e.target.getAttribute('data-id'), 'Reject'));
+                });
             }
         }).catch(err => console.error("Pending Load Error", err));
+
+        // Handle Approve/Reject
+        async function handleManagerDecision(leaveId, decision) {
+            try {
+                await apiRequest('/leave/approve', 'POST', {
+                    leave_id: leaveId,
+                    decision: decision
+                });
+                showToast(`Leave request ${decision.toLowerCase()}d successfully.`, 'success');
+                loadManagerData(); // Refresh the list
+            } catch (err) {
+                // Errors handled by apiRequest
+            }
+        }
 
         // Load Calendar Data
         apiRequest('/leave/calendar').then(data => {
@@ -113,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             try {
-                await apiRequest('/leave/quota/update', 'PUT', payload);
+                await apiRequest('/leave/update-quota', 'POST', payload);
                 showToast('Quota updated successfully!', 'success');
                 quotaForm.reset();
             } catch (error) {
