@@ -32,7 +32,21 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+        const url = `${API_BASE_URL}${endpoint}`;
+        console.log(`[API] ${method} ${url}`, body || '');
+        const response = await fetch(url, config);
+        const responseText = await response.text();
+        let responseData = {};
+
+        if (responseText) {
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (err) {
+                responseData = { raw: responseText };
+            }
+        }
+
+        console.log(`[API] ${method} ${url} -> ${response.status}`, responseData);
 
         // Handle specific error codes gracefully
         if (response.status === 401) {
@@ -52,11 +66,43 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
             throw new Error('Server Error');
         }
 
-        return await response.json();
+        if (!response.ok) {
+            const errorMessage = responseData.message || responseData.error || 'Request failed';
+            showToast(errorMessage, 'error');
+            throw new Error(errorMessage);
+        }
+
+        return responseData;
     } catch (error) {
+        if (error && error.message !== 'Unauthorized' && error.message !== 'Forbidden' && error.message !== 'Server Error') {
+            showToast('Network/API error. Please check your connection and try again.', 'error');
+        }
         console.error('API Request Error:', error);
         throw error;
     }
+}
+
+async function resolveUserRoleFromBackend(token) {
+    const roleEndpoints = ['/identity/me', '/leave/identity', '/leave/me'];
+    for (const endpoint of roleEndpoints) {
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!response.ok) continue;
+            const data = await response.json();
+            const backendRole = data.role || data.user_role || data.group || data.assigned_role;
+            if (backendRole) return backendRole;
+            if (Array.isArray(data.groups) && data.groups.length > 0) return data.groups[0];
+        } catch (err) {
+            console.warn(`Role resolution failed on ${endpoint}`);
+        }
+    }
+    return null;
 }
 
 // Global helper for toast notifications
@@ -80,6 +126,15 @@ function showToast(message, type = 'success') {
     setTimeout(() => {
         toast.classList.remove('show');
     }, 3000);
+}
+
+function setButtonLoading(button, isLoading, loadingText = 'Loading...') {
+    if (!button) return;
+    if (!button.dataset.originalText) {
+        button.dataset.originalText = button.textContent;
+    }
+    button.textContent = isLoading ? loadingText : button.dataset.originalText;
+    button.disabled = isLoading;
 }
 
 // --- AWS Cognito JWT Authorization Helpers ---

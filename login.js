@@ -18,6 +18,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const cognitoidentityserviceprovider = new AWS.CognitoIdentityServiceProvider();
     const APP_CLIENT_ID = '2a98a6f4c48ogvpcmcsgugv3rm';
 
+    function normalizeRole(role) {
+        const value = String(role || '').trim().toLowerCase();
+        if (value === 'employee') return 'Employee';
+        if (value === 'manager') return 'Manager';
+        if (value === 'hr_admin' || value === 'hr admin' || value === 'hr-admin') return 'HR_Admin';
+        return null;
+    }
+
+    async function validateSelectedRole(idToken, selectedRoleRaw) {
+        const selectedRole = normalizeRole(selectedRoleRaw);
+        const backendRole = normalizeRole(await resolveUserRoleFromBackend(idToken));
+        let effectiveRole = backendRole;
+
+        if (!effectiveRole) {
+            const payload = parseJwt(idToken);
+            const userGroups = payload && payload['cognito:groups'] ? payload['cognito:groups'] : [];
+            if (userGroups.includes('HR_Admin') || userGroups.includes('hr_admin') || userGroups.includes('HR Admin')) {
+                effectiveRole = 'HR_Admin';
+            } else if (userGroups.includes('Manager')) {
+                effectiveRole = 'Manager';
+            } else if (userGroups.includes('Employee')) {
+                effectiveRole = 'Employee';
+            }
+        }
+
+        if (!effectiveRole || effectiveRole !== selectedRole) {
+            return { ok: false };
+        }
+        return { ok: true, role: effectiveRole };
+    }
+
+    function routeToRole(role) {
+        if (role === 'HR_Admin') {
+            window.location.href = 'hr-admin.html';
+            return;
+        }
+        if (role === 'Manager') {
+            window.location.href = 'manager.html';
+            return;
+        }
+        if (role === 'Employee') {
+            window.location.href = 'employee.html';
+            return;
+        }
+    }
+
     // Handle Login with AWS Cognito
     loginForm.addEventListener('submit', (e) => {
         e.preventDefault(); // Stop page from reloading
@@ -41,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // 3. Send Request to AWS Cognito
-        cognitoidentityserviceprovider.initiateAuth(params, function (err, data) {
+        cognitoidentityserviceprovider.initiateAuth(params, async function (err, data) {
             if (err) {
                 console.error('Login failed:', err);
                 showToast(err.message || 'Login failed Check Credentials', 'error');
@@ -87,23 +133,8 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('idToken', idToken);
             localStorage.setItem('userEmail', email);
 
-            // 7. Decode token and validate against dropdown role
-            const payload = parseJwt(idToken); // Helper in common.js
-            const userGroups = payload['cognito:groups'] || [];
-            const selectedRole = roleSelect.value.toLowerCase(); // 'employee', 'manager', or 'hr_admin'
-
-            let assignedRole = null;
-
-            if (selectedRole === 'hr_admin' && (userGroups.includes('HR_Admin') || userGroups.includes('hr_admin') || userGroups.includes('hr admin') || userGroups.includes('HR Admin'))) {
-                assignedRole = 'HR_Admin';
-                window.location.href = 'hr-admin.html';
-            } else if (selectedRole === 'manager' && userGroups.includes('Manager')) {
-                assignedRole = 'Manager';
-                window.location.href = 'manager.html';
-            } else if (selectedRole === 'employee' && userGroups.includes('Employee')) {
-                assignedRole = 'Employee';
-                window.location.href = 'employee.html';
-            } else {
+            const authResult = await validateSelectedRole(idToken, roleSelect.value);
+            if (!authResult.ok) {
                 showToast('You are not authorized for this role.', 'error');
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
@@ -114,9 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (assignedRole) {
-                localStorage.setItem('role', assignedRole);
-            }
+            localStorage.setItem('role', authResult.role);
+            routeToRole(authResult.role);
         });
     });
 
@@ -143,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Session: session
         };
 
-        cognitoidentityserviceprovider.respondToAuthChallenge(challengeParams, function (err, data) {
+        cognitoidentityserviceprovider.respondToAuthChallenge(challengeParams, async function (err, data) {
             submitBtn.innerHTML = originalText;
             submitBtn.disabled = false;
 
@@ -161,31 +191,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('idToken', idToken);
                 localStorage.setItem('userEmail', username);
 
-                // Decode token and validate against dropdown role
-                const payload = parseJwt(idToken);
-                const userGroups = payload['cognito:groups'] || [];
-                const selectedRole = roleSelect.value.toLowerCase();
-
-                let assignedRole = null;
-
-                if (selectedRole === 'hr_admin' && (userGroups.includes('HR_Admin') || userGroups.includes('hr_admin') || userGroups.includes('hr admin') || userGroups.includes('HR Admin'))) {
-                    assignedRole = 'HR_Admin';
-                    window.location.href = 'hr-admin.html';
-                } else if (selectedRole === 'manager' && userGroups.includes('Manager')) {
-                    assignedRole = 'Manager';
-                    window.location.href = 'manager.html';
-                } else if (selectedRole === 'employee' && userGroups.includes('Employee')) {
-                    assignedRole = 'Employee';
-                    window.location.href = 'employee.html';
-                } else {
+                const authResult = await validateSelectedRole(idToken, roleSelect.value);
+                if (!authResult.ok) {
                     showToast('Password changed, but you are not authorized for the selected role.', 'error');
                     localStorage.removeItem('idToken');
                     localStorage.removeItem('userEmail');
+                    return;
                 }
 
-                if (assignedRole) {
-                    localStorage.setItem('role', assignedRole);
-                }
+                localStorage.setItem('role', authResult.role);
+                routeToRole(authResult.role);
             } else {
                 // Edge case: Changed password but requires re-authentication
                 showToast("Password updated. Please log in again.", "success");

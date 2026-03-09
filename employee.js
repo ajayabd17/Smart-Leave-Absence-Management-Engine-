@@ -1,39 +1,54 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Check Authorization using Cognito Token Check
-    // We restrict access to users having the 'Employee' group or role in Cognito
     const payload = checkCognitoAuth(['Employee']);
-    if (!payload) return; // checkCognitoAuth handles the redirect to login
+    if (!payload) return;
 
-    // Set User Profile from Cognito token data
     const userEmail = payload.email || localStorage.getItem('userEmail');
     if (userEmail) {
         document.getElementById('user-name').textContent = userEmail.split('@')[0];
         document.getElementById('user-role').textContent = localStorage.getItem('role') || 'Employee';
-        
-        // Fetch basic data after user is loaded
-        loadEmployeeData();
     }
 
     const leaveTypeVisuals = {
+        annual: { icon: 'fa-solid fa-plane', color: 'green', label: 'Annual Leave' },
         earned: { icon: 'fa-solid fa-plane', color: 'green', label: 'Earned Leave' },
         sick: { icon: 'fa-solid fa-briefcase-medical', color: 'red', label: 'Sick Leave' },
         casual: { icon: 'fa-solid fa-mug-hot', color: 'blue', label: 'Casual Leave' },
         unpaid: { icon: 'fa-solid fa-wallet', color: 'orange', label: 'Unpaid Leave' }
     };
+    let currentBalancesByType = {};
 
     function normalizeType(rawType) {
         return String(rawType || '').trim().toLowerCase();
     }
 
+    function calculateRequestedDays(startDate, endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+        const diffMs = end.getTime() - start.getTime();
+        if (diffMs < 0) return null;
+        return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    function showBalancesLoading() {
+        const container = document.getElementById('balance-cards');
+        container.innerHTML = '<div class="card"><p class="text-muted">Loading leave balances...</p></div>';
+    }
+
+    function showHistoryLoading() {
+        const body = document.getElementById('leave-history-body');
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">Loading leave history...</td></tr>';
+    }
+
     async function loadLeaveConfig() {
+        const leaveTypeSelect = document.getElementById('leave-type');
         try {
-            const config = await apiRequest('/leave/config');
-            if (!Array.isArray(config)) return;
+            const configResponse = await apiRequest('/leave/config');
+            const configRows = Array.isArray(configResponse) ? configResponse : (configResponse.data || []);
+            if (!Array.isArray(configRows) || configRows.length === 0) return;
 
-            const leaveTypeSelect = document.getElementById('leave-type');
             leaveTypeSelect.innerHTML = '';
-
-            config.forEach((item) => {
+            configRows.forEach((item) => {
                 const key = normalizeType(item.leave_type || item.type);
                 const label = item.display_name || leaveTypeVisuals[key]?.label || key.toUpperCase();
                 const option = document.createElement('option');
@@ -42,133 +57,151 @@ document.addEventListener('DOMContentLoaded', () => {
                 leaveTypeSelect.appendChild(option);
             });
         } catch (err) {
-            console.warn('Leave config API unavailable, using static types.');
+            console.warn('Leave config API unavailable, using static leave type options.');
         }
     }
 
-    // Function to load dashboard data
-    function loadEmployeeData() {
-        // Load Balances
-        apiRequest('/leave/balance').then(data => {
-            if (data) {
-                const normalized = Array.isArray(data)
-                    ? data.reduce((acc, row) => {
-                        acc[normalizeType(row.leave_type)] = {
-                            used: row.used_days || 0,
-                            total: row.total_quota || 0
-                        };
-                        return acc;
-                    }, {})
-                    : data;
+    async function loadLeaveBalances() {
+        showBalancesLoading();
+        try {
+            const raw = await apiRequest('/leave/balance');
+            const rows = Array.isArray(raw) ? raw : (raw.balances || raw.data || []);
+            const normalized = {};
 
-                const keys = Object.keys(normalized);
-                const container = document.getElementById('balance-cards');
-                if (container && keys.length > 0) {
-                    container.innerHTML = '';
-                    keys.forEach((key) => {
-                        const visual = leaveTypeVisuals[key] || { icon: 'fa-solid fa-calendar-day', color: 'blue', label: key.toUpperCase() };
-                        const value = normalized[key] || {};
-                        const card = document.createElement('div');
-                        card.className = 'card balance-card';
-                        card.innerHTML = `
-                            <div class="card-icon ${visual.color}"><i class="${visual.icon}"></i></div>
-                            <div class="card-details">
-                                <h3>${visual.label}</h3>
-                                <div class="flex-row">
-                                    <span class="days-left">${value.used || 0}<span>d</span></span>
-                                    <span class="total-days">/ ${value.total || 0}</span>
-                                </div>
-                            </div>
-                        `;
-                        container.appendChild(card);
-                    });
-                }
-            }
-        }).catch(err => console.error("Balance Load Error", err));
-
-        // Load History
-        apiRequest('/leave/history').then(data => {
-            if (data && Array.isArray(data)) {
-                const historyBody = document.getElementById('leave-history-body');
-                historyBody.innerHTML = ''; // Clear existing
-
-                if (data.length === 0) {
-                    historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No leave history found.</td></tr>';
-                    return;
-                }
-
-                data.forEach(record => {
-                    // Normalize status text for CSS classes
-                    const statusStr = (record.status || '').toUpperCase();
-                    let statusClass = 'pending';
-                    if (statusStr === 'APPROVED') statusClass = 'approved';
-                    if (statusStr === 'REJECTED') statusClass = 'rejected';
-
-                    // Determine color classes
-                    const typeStr = (record.leave_type || '').toUpperCase();
-                    let typeColor = 'blue'; // casual default
-                    if (typeStr.includes('EARNED')) typeColor = 'green';
-                    if (typeStr.includes('UNPAID')) typeColor = 'orange';
-                    if (typeStr.includes('SICK')) typeColor = 'red';
-
-                    const tr = document.createElement('tr');
-                    
-                    // The backend returns start_date, end_date, leave_type, status
-                    tr.innerHTML = `
-                        <td><span class="type-indicator ${typeColor}"></span> ${record.leave_type || 'Unknown'}</td>
-                        <td>${record.start_date} to ${record.end_date}</td>
-                        <td>${record.start_date}</td>
-                        <td><span class="status-badge ${statusClass}">${record.status}</span></td>
-                    `;
-                    historyBody.appendChild(tr);
+            if (Array.isArray(rows)) {
+                rows.forEach((row) => {
+                    const type = normalizeType(row.leave_type || row['leave_type#year']?.split('#')[0]);
+                    normalized[type] = {
+                        remaining: Number(row.remaining_balance ?? row.remaining ?? 0),
+                        total: Number(row.total_quota ?? row.total ?? 0)
+                    };
+                });
+            } else {
+                Object.keys(raw || {}).forEach((key) => {
+                    const value = raw[key] || {};
+                    normalized[normalizeType(key)] = {
+                        remaining: Number(value.remaining_balance ?? value.remaining ?? 0),
+                        total: Number(value.total_quota ?? value.total ?? 0)
+                    };
                 });
             }
-        }).catch(err => console.error("History Load Error", err));
+
+            const container = document.getElementById('balance-cards');
+            const keys = Object.keys(normalized);
+            currentBalancesByType = normalized;
+            if (keys.length === 0) {
+                container.innerHTML = '<div class="card"><p class="text-muted">No leave balances found.</p></div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            keys.forEach((type) => {
+                const visual = leaveTypeVisuals[type] || { icon: 'fa-solid fa-calendar-day', color: 'blue', label: type.toUpperCase() };
+                const balance = normalized[type];
+                const card = document.createElement('div');
+                card.className = 'card balance-card';
+                card.innerHTML = `
+                    <div class="card-icon ${visual.color}"><i class="${visual.icon}"></i></div>
+                    <div class="card-details">
+                        <h3>${visual.label}</h3>
+                        <div class="flex-row">
+                            <span class="days-left">${balance.remaining}<span>d</span></span>
+                            <span class="total-days">/ ${balance.total}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        } catch (err) {
+            const container = document.getElementById('balance-cards');
+            container.innerHTML = '<div class="card"><p class="text-muted">Unable to load leave balances.</p></div>';
+        }
     }
 
-    // Employee Apply Leave API Integration
+    async function loadLeaveHistory() {
+        showHistoryLoading();
+        try {
+            const raw = await apiRequest('/leave/history');
+            const rows = Array.isArray(raw) ? raw : (raw.history || raw.data || []);
+            const historyBody = document.getElementById('leave-history-body');
+            historyBody.innerHTML = '';
+
+            if (!Array.isArray(rows) || rows.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No leave history found.</td></tr>';
+                return;
+            }
+
+            rows.forEach((record) => {
+                const statusStr = (record.status || '').toUpperCase();
+                let statusClass = 'pending';
+                if (statusStr === 'APPROVED') statusClass = 'approved';
+                if (statusStr === 'REJECTED' || statusStr === 'AUTO_REJECTED') statusClass = 'rejected';
+
+                const typeStr = normalizeType(record.leave_type);
+                let typeColor = 'blue';
+                if (typeStr.includes('earned') || typeStr.includes('annual')) typeColor = 'green';
+                if (typeStr.includes('unpaid')) typeColor = 'orange';
+                if (typeStr.includes('sick')) typeColor = 'red';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span class="type-indicator ${typeColor}"></span> ${record.leave_type || 'Unknown'}</td>
+                    <td>${record.start_date || '-'} to ${record.end_date || '-'}</td>
+                    <td>${record.created_at ? new Date(record.created_at).toLocaleDateString() : (record.start_date || '-')}</td>
+                    <td><span class="status-badge ${statusClass}">${record.status || 'PENDING'}</span></td>
+                `;
+                historyBody.appendChild(tr);
+            });
+        } catch (err) {
+            const historyBody = document.getElementById('leave-history-body');
+            historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">Unable to load leave history.</td></tr>';
+        }
+    }
+
+    async function refreshEmployeeDashboard() {
+        await Promise.all([loadLeaveBalances(), loadLeaveHistory(), loadLeaveConfig()]);
+    }
+
     const applyLeaveForm = document.getElementById('apply-leave-form');
     if (applyLeaveForm) {
         applyLeaveForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Store original button state to revert later
             const submitBtn = applyLeaveForm.querySelector('button[type="submit"]');
-            const originalBtnText = submitBtn.textContent;
-            submitBtn.textContent = 'Submitting...';
-            submitBtn.disabled = true;
+            setButtonLoading(submitBtn, true, 'Submitting...');
 
-            const leaveType = document.getElementById('leave-type').value.toUpperCase();
-            const startDate = document.getElementById('date-from').value;
-            const endDate = document.getElementById('date-to').value;
-            const reason = document.getElementById('leave-reason').value;
-
-            // Prepare payload matching the API schema
-            const payload = {
-                leave_type: leaveType,
-                start_date: startDate,
-                end_date: endDate,
-                reason: reason
+            const payloadBody = {
+                leave_type: String(document.getElementById('leave-type').value || '').toUpperCase(),
+                start_date: document.getElementById('date-from').value,
+                end_date: document.getElementById('date-to').value,
+                reason: document.getElementById('leave-reason').value
             };
 
             try {
-                // Send POST request to API gateway via apiRequest helper
-                const responseData = await apiRequest('/leave/request', 'POST', payload);
+                const selectedType = normalizeType(payloadBody.leave_type);
+                const requestedDays = calculateRequestedDays(payloadBody.start_date, payloadBody.end_date);
+                if (requestedDays === null) {
+                    showToast('Please select a valid leave date range.', 'error');
+                    return;
+                }
+
+                const selectedBalance = currentBalancesByType[selectedType];
+                if (selectedBalance && Number(requestedDays) > Number(selectedBalance.remaining)) {
+                    showToast(`Insufficient ${selectedType.toUpperCase()} balance. Apply for ${selectedBalance.remaining} day(s) or fewer.`, 'error');
+                    return;
+                }
+
+                await apiRequest('/leave/apply', 'POST', payloadBody);
                 showToast('Leave request submitted successfully!', 'success');
                 applyLeaveForm.reset();
-                
-                // Refresh data to show pending status
-                loadEmployeeData();
+                await Promise.all([loadLeaveBalances(), loadLeaveHistory()]);
             } catch (error) {
-                console.error("Error submitting leave:", error);
-                // apiRequest helper handles the toast error message internally.
+                console.error('Error submitting leave request', error);
             } finally {
-                // Restore button state
-                submitBtn.textContent = originalBtnText;
-                submitBtn.disabled = false;
+                setButtonLoading(submitBtn, false);
             }
         });
     }
 
-    loadLeaveConfig();
+    refreshEmployeeDashboard();
 });
