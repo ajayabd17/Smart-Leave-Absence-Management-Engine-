@@ -58,14 +58,14 @@
                 </div>
 
                 <!-- Stats summary -->
-                <div class="balance-cards">
+                <div class="balance-cards" id="balance-cards">
                     <div class="card balance-card">
                         <div class="card-icon green"><i class="fa-solid fa-plane"></i></div>
                         <div class="card-details">
-                            <h3>Annual Leave</h3>
+                            <h3>Earned Leave</h3>
                             <div class="flex-row">
-                                <span class="days-left" id="annual-used">-<span>d</span></span>
-                                <span class="total-days" id="annual-total">/ -</span>
+                                <span class="days-left" id="earned-used">-<span>d</span></span>
+                                <span class="total-days" id="earned-total">/ -</span>
                             </div>
                         </div>
                     </div>
@@ -89,6 +89,16 @@
                             </div>
                         </div>
                     </div>
+                    <div class="card balance-card">
+                        <div class="card-icon orange"><i class="fa-solid fa-wallet"></i></div>
+                        <div class="card-details">
+                            <h3>Unpaid Leave</h3>
+                            <div class="flex-row">
+                                <span class="days-left" id="unpaid-used">-<span>d</span></span>
+                                <span class="total-days" id="unpaid-total">/ -</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="dashboard-grid">
@@ -99,9 +109,10 @@
                             <div class="form-group">
                                 <label for="leave-type">Leave Type</label>
                                 <select id="leave-type" required>
-                                    <option value="Annual">Annual Leave</option>
+                                    <option value="Earned">Earned Leave</option>
                                     <option value="Sick">Sick Leave</option>
                                     <option value="Casual">Casual Leave</option>
+                                    <option value="Unpaid">Unpaid Leave</option>
                                 </select>
                             </div>
                             <div class="form-row">

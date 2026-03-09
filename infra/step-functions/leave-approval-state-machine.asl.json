@@ -1,0 +1,100 @@
+{
+  "Comment": "SmartLeave multi-level approval workflow",
+  "StartAt": "LoadRequest",
+  "States": {
+    "LoadRequest": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:GetLeaveRequest",
+      "Next": "CheckManagerDecision"
+    },
+    "CheckManagerDecision": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status",
+          "StringEquals": "REJECTED",
+          "Next": "NotifyRejected"
+        },
+        {
+          "Variable": "$.status",
+          "StringEquals": "MANAGER_APPROVED",
+          "Next": "CheckDurationThreshold"
+        }
+      ],
+      "Default": "WaitForManagerDecision"
+    },
+    "WaitForManagerDecision": {
+      "Type": "Wait",
+      "Seconds": 900,
+      "Next": "CheckSlaTimeout"
+    },
+    "CheckSlaTimeout": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.hours_since_submission",
+          "NumericGreaterThanEquals": 48,
+          "Next": "EscalateManagerInaction"
+        }
+      ],
+      "Default": "LoadRequest"
+    },
+    "EscalateManagerInaction": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:EscalateManagerInaction",
+      "Next": "WaitForManagerDecision"
+    },
+    "CheckDurationThreshold": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.total_days",
+          "NumericGreaterThan": 5,
+          "Next": "WaitForHrDecision"
+        }
+      ],
+      "Default": "FinalizeApproval"
+    },
+    "WaitForHrDecision": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:WaitForHrApproval",
+      "Next": "CheckHrDecision"
+    },
+    "CheckHrDecision": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status",
+          "StringEquals": "HR_APPROVED",
+          "Next": "FinalizeApproval"
+        },
+        {
+          "Variable": "$.status",
+          "StringEquals": "REJECTED",
+          "Next": "NotifyRejected"
+        }
+      ],
+      "Default": "WaitForHrDecision"
+    },
+    "FinalizeApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:FinalizeLeaveRequest",
+      "Next": "UpdateLeaveBalance"
+    },
+    "UpdateLeaveBalance": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:UpdateLeaveQuota",
+      "Next": "NotifyApproved"
+    },
+    "NotifyApproved": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:SendLeaveStatusEmail",
+      "End": true
+    },
+    "NotifyRejected": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:ap-south-1:123456789012:function:SendLeaveStatusEmail",
+      "End": true
+    }
+  }
+}
