@@ -29,6 +29,29 @@ const APP_CONFIG = getAppConfig();
 const API_BASE_URL = APP_CONFIG.API_BASE_URL;
 window.setSmartLeaveConfig = setAppConfig;
 
+const AUTH_KEYS = ['idToken', 'role', 'userEmail', 'userRole'];
+
+function getAuthValue(key) {
+    return sessionStorage.getItem(key) || localStorage.getItem(key);
+}
+
+function setAuthValue(key, value) {
+    sessionStorage.setItem(key, value);
+}
+
+function clearAuth() {
+    AUTH_KEYS.forEach((key) => {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+    });
+}
+
+window.authStorage = {
+    get: getAuthValue,
+    set: setAuthValue,
+    clear: clearAuth
+};
+
 /**
  * Reusable helper method to make all calls to AWS Serverless API.
  * Automatically injects the Cognito JWT token into headers and handles status codes.
@@ -37,7 +60,7 @@ window.setSmartLeaveConfig = setAppConfig;
  * @param {object|null} body 
  */
 async function apiRequest(endpoint, method = 'GET', body = null) {
-    const token = localStorage.getItem('idToken');
+    const token = getAuthValue('idToken');
 
     const headers = {
         'Content-Type': 'application/json'
@@ -78,7 +101,7 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
         // Handle specific error codes gracefully
         if (response.status === 401) {
             showToast('Session expired. Please log in again.', 'error');
-            localStorage.removeItem('idToken');
+            clearAuth();
             setTimeout(() => window.location.href = 'index.html', 1500);
             throw new Error('Unauthorized');
         }
@@ -200,7 +223,7 @@ function normalizeRoleValue(role) {
  */
 function checkCognitoAuth(allowedGroups) {
     // 1. Get the Cognito IdToken from localStorage
-    const token = localStorage.getItem('idToken');
+    const token = getAuthValue('idToken');
 
     if (!token) {
         console.warn('No token found, redirecting to login');
@@ -212,7 +235,7 @@ function checkCognitoAuth(allowedGroups) {
     const payload = parseJwt(token);
     if (!payload) {
         console.warn('Invalid token format, redirecting to login');
-        localStorage.removeItem('idToken');
+        clearAuth();
         window.location.href = 'index.html';
         return false;
     }
@@ -221,7 +244,7 @@ function checkCognitoAuth(allowedGroups) {
     const currentTime = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < currentTime) {
         console.warn('Token expired, redirecting to login');
-        localStorage.removeItem('idToken');
+        clearAuth();
         window.location.href = 'index.html';
         return false;
     }
@@ -251,9 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem('idToken'); // Clear Cognito Token
-            localStorage.removeItem('userRole');
-            localStorage.removeItem('userEmail');
+            clearAuth();
             window.location.href = 'index.html';
         });
     }

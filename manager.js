@@ -51,13 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = checkCognitoAuth(['Manager', 'HR_Admin']);
         if (!payload) return;
 
-        const userEmail = payload.email || localStorage.getItem('userEmail');
+        const userEmail = payload.email || authStorage.get('userEmail');
         if (userEmail) {
             document.getElementById('user-name').textContent = userEmail.split('@')[0];
-            document.getElementById('user-role').textContent = localStorage.getItem('role') || 'Manager';
+            document.getElementById('user-role').textContent = authStorage.get('role') || 'Manager';
         }
 
-        const role = localStorage.getItem('role');
+        const role = authStorage.get('role');
         if (role === 'HR_Admin') {
             const hrSection = document.getElementById('hr-admin-section');
             if (hrSection) hrSection.style.display = 'block';
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function downloadReport(format) {
-        const token = localStorage.getItem('idToken');
+        const token = authStorage.get('idToken');
         const response = await fetch(`${API_BASE_URL}/leave/report?format=${format}`, {
             headers: { Authorization: `Bearer ${token}` }
         });

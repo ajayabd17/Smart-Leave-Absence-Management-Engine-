@@ -16,12 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // AWS Config
     AWS.config.region = APP_CONFIG.AWS_REGION || 'ap-south-1';
     const cognitoidentityserviceprovider = new AWS.CognitoIdentityServiceProvider();
-    const APP_CLIENT_ID = APP_CONFIG.COGNITO_APP_CLIENT_ID;
+    const APP_CLIENT_ID = APP_CONFIG.COGNITO_APP_CLIENT_ID || '2a98a6f4c48ogvpcmcsgugv3rm';
 
-    if (!APP_CLIENT_ID) {
-        showToast('Missing Cognito App Client configuration.', 'error');
-        loginForm.querySelector('button[type="submit"]').disabled = true;
-        return;
+    if (!APP_CONFIG.COGNITO_APP_CLIENT_ID) {
+        console.warn('Using fallback Cognito App Client ID. Configure COGNITO_APP_CLIENT_ID for production.');
     }
 
     function normalizeRole(role) {
@@ -136,8 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const idToken = data.AuthenticationResult.IdToken;
 
             // 6. Store the Token
-            localStorage.setItem('idToken', idToken);
-            localStorage.setItem('userEmail', email);
+            authStorage.set('idToken', idToken);
+            authStorage.set('userEmail', email);
 
             const authResult = await validateSelectedRole(idToken, roleSelect.value);
             if (!authResult.ok) {
@@ -146,12 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 submitBtn.disabled = false;
 
                 // Remove tokens since login was rejected
-                localStorage.removeItem('idToken');
-                localStorage.removeItem('userEmail');
+                authStorage.clear();
                 return;
             }
 
-            localStorage.setItem('role', authResult.role);
+            authStorage.set('role', authResult.role);
             routeToRole(authResult.role);
         });
     });
@@ -194,18 +191,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast("Password updated successfully! Logging you in...", "success");
 
                 const idToken = data.AuthenticationResult.IdToken;
-                localStorage.setItem('idToken', idToken);
-                localStorage.setItem('userEmail', username);
+                authStorage.set('idToken', idToken);
+                authStorage.set('userEmail', username);
 
                 const authResult = await validateSelectedRole(idToken, roleSelect.value);
                 if (!authResult.ok) {
                     showToast('Password changed, but you are not authorized for the selected role.', 'error');
-                    localStorage.removeItem('idToken');
-                    localStorage.removeItem('userEmail');
+                    authStorage.clear();
                     return;
                 }
 
-                localStorage.setItem('role', authResult.role);
+                authStorage.set('role', authResult.role);
                 routeToRole(authResult.role);
             } else {
                 // Edge case: Changed password but requires re-authentication

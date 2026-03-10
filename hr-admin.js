@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     let calendarRows = [];
 
-    const userEmail = payload.email || localStorage.getItem('userEmail');
+    const userEmail = payload.email || authStorage.get('userEmail');
     if (userEmail) {
         document.getElementById('user-name').textContent = userEmail.split('@')[0];
         document.getElementById('user-role').textContent = 'HR Admin';
@@ -348,7 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function downloadReport(format) {
-        const token = localStorage.getItem('idToken');
+        const token = authStorage.get('idToken');
         const response = await fetch(`${API_BASE_URL}/leave/report?format=${format}`, {
             headers: { Authorization: `Bearer ${token}` }
         });

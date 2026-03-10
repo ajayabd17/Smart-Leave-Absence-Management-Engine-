@@ -2,10 +2,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = checkCognitoAuth(['Employee']);
     if (!payload) return;
 
-    const userEmail = payload.email || localStorage.getItem('userEmail');
+    const userEmail = payload.email || authStorage.get('userEmail');
     if (userEmail) {
         document.getElementById('user-name').textContent = userEmail.split('@')[0];
-        document.getElementById('user-role').textContent = localStorage.getItem('role') || 'Employee';
+        document.getElementById('user-role').textContent = authStorage.get('role') || 'Employee';
     }
 
     const leaveTypeVisuals = {
