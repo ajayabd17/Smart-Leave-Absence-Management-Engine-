@@ -119,14 +119,20 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
         }
 
         if (!response.ok) {
-            const errorMessage = responseData.message || responseData.error || 'Request failed';
+            let errorMessage = responseData.message || responseData.error || 'Request failed';
+            const normalized = String(errorMessage || '').toLowerCase();
+            if (normalized.includes('overlap')) {
+                errorMessage = 'Your selected dates overlap with an existing leave request.';
+            }
             showToast(errorMessage, 'error');
-            throw new Error(errorMessage);
+            const apiError = new Error(errorMessage);
+            apiError.isApiError = true;
+            throw apiError;
         }
 
         return responseData;
     } catch (error) {
-        if (error && error.message !== 'Unauthorized' && error.message !== 'Forbidden' && error.message !== 'Server Error') {
+        if (error && !error.isApiError && error.message !== 'Unauthorized' && error.message !== 'Forbidden' && error.message !== 'Server Error') {
             showToast('Network/API error. Please check your connection and try again.', 'error');
         }
         console.error('API Request Error:', error);

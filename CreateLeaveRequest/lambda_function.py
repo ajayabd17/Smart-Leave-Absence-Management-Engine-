@@ -233,17 +233,15 @@ def lambda_handler(event, context):
 
         sns.publish(
             TopicArn=SNS_TOPIC_ARN,
-            Subject="New Leave Request Submitted",
-            Message=json.dumps(
-                {
-                    "employee_id": employee_id,
-                    "request_id": request_id,
-                    "leave_type": leave_type,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "total_days": total_days,
-                    "manager_email": identity["manager_email"],
-                }
+            Subject=f"SmartLeave Request Submitted - {employee_id} ({leave_type.upper()})",
+            Message=(
+                "A new leave request has been submitted and entered the approval workflow.\n\n"
+                f"Employee ID: {employee_id}\n"
+                f"Request ID: {request_id}\n"
+                f"Leave Type: {leave_type.upper()}\n"
+                f"Dates: {start_date} to {end_date}\n"
+                f"Total Days: {total_days}\n\n"
+                "Manager action links are sent by the approval workflow notification."
             ),
         )
 

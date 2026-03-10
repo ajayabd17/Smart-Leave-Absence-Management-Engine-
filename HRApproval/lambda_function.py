@@ -8,13 +8,12 @@ from datetime import datetime, timedelta, timezone
 import boto3
 
 
-sns = boto3.client("sns")
 ses = boto3.client("ses")
 
-TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
 APPROVAL_API_BASE = os.environ["APPROVAL_API_BASE"]
 TOKEN_SECRET = os.environ["TOKEN_SECRET"]
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL") or os.environ.get("SES_FROM_EMAIL", "")
+HR_EMAILS = [e.strip() for e in os.environ.get("HR_EMAILS", "").split(",") if e.strip()]
 
 
 def create_token(payload):
@@ -29,31 +28,40 @@ def lambda_handler(event, context):
     if not isinstance(payload, dict):
         raise ValueError("Invalid input payload")
 
-    employee_id = payload.get("employee_id")
-    request_id = payload.get("request_id")
-    if not employee_id or not request_id:
-        raise KeyError("Missing required fields: employee_id/request_id")
-
+    request_id = payload["request_id"]
+    employee_id = payload.get("employee_id", "")
     leave_type = str(payload.get("leave_type", "")).upper()
     start_date = payload.get("start_date", "")
     end_date = payload.get("end_date", "")
-    manager_email = payload.get("manager_email", "")
     total_days = int(payload.get("total_days", 0))
+
+    if not HR_EMAILS:
+        return {"message": "No HR emails configured", "request_id": request_id, "hr_approval_sent": False}
 
     expires_at = int((datetime.now(timezone.utc) + timedelta(hours=48)).timestamp())
     approve_token = create_token(
-        {"request_id": request_id, "decision": "APPROVED", "actor_role": "MANAGER", "exp": expires_at}
+        {
+            "request_id": request_id,
+            "decision": "APPROVED",
+            "actor_role": "HR_ADMIN",
+            "exp": expires_at,
+        }
     )
     reject_token = create_token(
-        {"request_id": request_id, "decision": "REJECTED", "actor_role": "MANAGER", "exp": expires_at}
+        {
+            "request_id": request_id,
+            "decision": "REJECTED",
+            "actor_role": "HR_ADMIN",
+            "exp": expires_at,
+        }
     )
 
     approve_link = f"{APPROVAL_API_BASE}/leave/approve?request_id={request_id}&decision=APPROVED&token={approve_token}"
     reject_link = f"{APPROVAL_API_BASE}/leave/approve?request_id={request_id}&decision=REJECTED&token={reject_token}"
 
-    text_message = (
-        "SmartLeave - Leave Approval Required\n\n"
-        "A leave request is awaiting your action.\n\n"
+    body = (
+        "SmartLeave - HR Approval Required\n\n"
+        "A leave request has been manager-approved and now requires HR decision.\n\n"
         f"Employee ID: {employee_id}\n"
         f"Request ID: {request_id}\n"
         f"Leave Type: {leave_type}\n"
@@ -63,36 +71,17 @@ def lambda_handler(event, context):
         "Approve Request:\n"
         f"{approve_link}\n\n"
         "Reject Request:\n"
-        f"{reject_link}\n\n"
-        "If you did not expect this email, please ignore it."
+        f"{reject_link}\n"
     )
 
-    topic_publish_ok = False
-    if TOPIC_ARN.startswith("arn:aws:sns:"):
-        sns.publish(
-            TopicArn=TOPIC_ARN,
-            Subject=f"SmartLeave Approval Required - {employee_id} ({leave_type})",
-            Message=text_message,
-        )
-        topic_publish_ok = True
-
-    if manager_email and SENDER_EMAIL:
+    if SENDER_EMAIL:
         ses.send_email(
             Source=SENDER_EMAIL,
-            Destination={"ToAddresses": [manager_email]},
+            Destination={"ToAddresses": HR_EMAILS},
             Message={
-                "Subject": {"Data": f"SmartLeave Approval Required - {employee_id} ({leave_type})"},
-                "Body": {"Text": {"Data": text_message}},
+                "Subject": {"Data": f"SmartLeave HR Approval Required - {employee_id} ({leave_type})"},
+                "Body": {"Text": {"Data": body}},
             },
         )
 
-    return {
-        "employee_id": employee_id,
-        "request_id": request_id,
-        "leave_type": leave_type,
-        "start_date": start_date,
-        "end_date": end_date,
-        "total_days": total_days,
-        "manager_email": manager_email,
-        "manager_approval_sent": bool(topic_publish_ok or (manager_email and SENDER_EMAIL)),
-    }
+    return {"request_id": request_id, "hr_approval_sent": True, "hr_recipients": HR_EMAILS}

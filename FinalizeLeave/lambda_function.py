@@ -11,9 +11,18 @@ leave_table = dynamodb.Table(os.environ["LEAVE_TABLE"])
 balance_table = dynamodb.Table(os.environ["BALANCE_TABLE"])
 
 
+def scan_all(table, **kwargs):
+    items = []
+    response = table.scan(**kwargs)
+    items.extend(response.get("Items", []))
+    while "LastEvaluatedKey" in response:
+        response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"], **kwargs)
+        items.extend(response.get("Items", []))
+    return items
+
+
 def find_request(request_id):
-    scan = leave_table.scan(FilterExpression=Attr("request_id").eq(request_id), Limit=1)
-    rows = scan.get("Items", [])
+    rows = scan_all(leave_table, FilterExpression=Attr("request_id").eq(request_id))
     return rows[0] if rows else None
 
 

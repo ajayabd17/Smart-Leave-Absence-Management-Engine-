@@ -1,5 +1,5 @@
 {
-  "Comment": "SmartLeave Approval Workflow with Manager/HR stages and 48h escalation",
+  "Comment": "SmartLeave: immediate decisions, with 48h inactivity watchdog for manager and HR",
   "StartAt": "Initialize",
   "States": {
     "Initialize": {
@@ -26,14 +26,14 @@
         "Payload.$": "$"
       },
       "ResultPath": "$.manager_approval",
-      "Next": "WaitManagerDecision"
+      "Next": "WaitManagerCheck"
     },
-    "WaitManagerDecision": {
+    "WaitManagerCheck": {
       "Type": "Wait",
-      "Seconds": 1800,
-      "Next": "GetRequestAfterManagerWait"
+      "Seconds": 60,
+      "Next": "GetAfterManagerCheck"
     },
-    "GetRequestAfterManagerWait": {
+    "GetAfterManagerCheck": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
@@ -43,23 +43,46 @@
         }
       },
       "ResultPath": "$.request_state",
-      "Next": "EvaluateManagerDecision"
+      "Next": "EvaluateManagerResult"
     },
-    "EvaluateManagerDecision": {
+    "EvaluateManagerResult": {
       "Type": "Choice",
       "Choices": [
         {
           "Variable": "$.request_state.Payload.status",
           "StringEquals": "REJECTED",
-          "Next": "NotifyRejected"
+          "Next": "EndCompleted"
         },
         {
           "Variable": "$.request_state.Payload.status",
-          "StringEquals": "MANAGER_APPROVED",
-          "Next": "CheckLeaveDuration"
+          "StringEquals": "APPROVED",
+          "Next": "EndCompleted"
+        },
+        {
+          "Variable": "$.request_state.Payload.status",
+          "StringEquals": "HR_APPROVED",
+          "Next": "EndCompleted"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.request_state.Payload.status",
+              "StringEquals": "MANAGER_APPROVED"
+            },
+            {
+              "Variable": "$.total_days",
+              "NumericGreaterThan": 5
+            }
+          ],
+          "Next": "WaitHrCheck"
+        },
+        {
+          "Variable": "$.request_state.Payload.status",
+          "StringEquals": "PENDING",
+          "Next": "IncrementManagerChecks"
         }
       ],
-      "Default": "IncrementManagerChecks"
+      "Default": "EndCompleted"
     },
     "IncrementManagerChecks": {
       "Type": "Pass",
@@ -82,55 +105,18 @@
       "Choices": [
         {
           "Variable": "$.manager_checks",
-          "NumericGreaterThanEquals": 96,
+          "NumericGreaterThanEquals": 2880,
           "Next": "EscalateManagerInaction"
         }
       ],
-      "Default": "WaitManagerDecision"
+      "Default": "WaitManagerCheck"
     },
-    "EscalateManagerInaction": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "EscalateManagerInaction",
-        "Payload.$": "$"
-      },
-      "ResultPath": "$.escalation",
-      "Next": "NotifyEscalation"
-    },
-    "NotifyEscalation": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "SendEmployeeNotification",
-        "Payload": {
-          "request_id.$": "$.request_id",
-          "employee_email.$": "$.employee_email",
-          "leave_type.$": "$.leave_type",
-          "start_date.$": "$.start_date",
-          "end_date.$": "$.end_date",
-          "status": "ESCALATED"
-        }
-      },
-      "End": true
-    },
-    "CheckLeaveDuration": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.total_days",
-          "NumericGreaterThan": 5,
-          "Next": "WaitHrDecision"
-        }
-      ],
-      "Default": "FinalizeLeave"
-    },
-    "WaitHrDecision": {
+    "WaitHrCheck": {
       "Type": "Wait",
-      "Seconds": 1800,
-      "Next": "GetRequestAfterHrWait"
+      "Seconds": 60,
+      "Next": "GetAfterHrCheck"
     },
-    "GetRequestAfterHrWait": {
+    "GetAfterHrCheck": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
@@ -140,37 +126,92 @@
         }
       },
       "ResultPath": "$.request_state",
-      "Next": "EvaluateHrDecision"
+      "Next": "EvaluateHrResult"
     },
-    "EvaluateHrDecision": {
+    "EvaluateHrResult": {
       "Type": "Choice",
       "Choices": [
         {
           "Variable": "$.request_state.Payload.status",
           "StringEquals": "REJECTED",
-          "Next": "NotifyRejected"
+          "Next": "EndCompleted"
+        },
+        {
+          "Variable": "$.request_state.Payload.status",
+          "StringEquals": "APPROVED",
+          "Next": "EndCompleted"
         },
         {
           "Variable": "$.request_state.Payload.status",
           "StringEquals": "HR_APPROVED",
-          "Next": "FinalizeLeave"
+          "Next": "EndCompleted"
+        },
+        {
+          "Variable": "$.request_state.Payload.status",
+          "StringEquals": "MANAGER_APPROVED",
+          "Next": "IncrementHrChecks"
         }
       ],
-      "Default": "WaitHrDecision"
+      "Default": "EndCompleted"
     },
-    "FinalizeLeave": {
+    "IncrementHrChecks": {
+      "Type": "Pass",
+      "Parameters": {
+        "request_id.$": "$.request_id",
+        "employee_id.$": "$.employee_id",
+        "leave_type.$": "$.leave_type",
+        "start_date.$": "$.start_date",
+        "end_date.$": "$.end_date",
+        "total_days.$": "$.total_days",
+        "employee_email.$": "$.employee_email",
+        "manager_email.$": "$.manager_email",
+        "manager_checks.$": "$.manager_checks",
+        "hr_checks.$": "States.MathAdd($.hr_checks, 1)"
+      },
+      "Next": "HrTimeoutCheck"
+    },
+    "HrTimeoutCheck": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.hr_checks",
+          "NumericGreaterThanEquals": 2880,
+          "Next": "EscalateHrInaction"
+        }
+      ],
+      "Default": "WaitHrCheck"
+    },
+    "EscalateManagerInaction": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
-        "FunctionName": "FinalizeLeave",
+        "FunctionName": "EscalateManagerInaction",
         "Payload": {
-          "request_id.$": "$.request_id"
+          "request_id.$": "$.request_id",
+          "employee_id.$": "$.employee_id",
+          "stage": "MANAGER",
+          "note": "Manager has not acted within 48 hours."
         }
       },
-      "ResultPath": "$.finalize_result",
-      "Next": "NotifyApproved"
+      "ResultPath": "$.manager_escalation",
+      "Next": "NotifyManagerEscalation"
     },
-    "NotifyApproved": {
+    "EscalateHrInaction": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "EscalateManagerInaction",
+        "Payload": {
+          "request_id.$": "$.request_id",
+          "employee_id.$": "$.employee_id",
+          "stage": "HR",
+          "note": "HR has not acted within 48 hours."
+        }
+      },
+      "ResultPath": "$.hr_escalation",
+      "Next": "NotifyHrEscalation"
+    },
+    "NotifyManagerEscalation": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
@@ -181,12 +222,12 @@
           "leave_type.$": "$.leave_type",
           "start_date.$": "$.start_date",
           "end_date.$": "$.end_date",
-          "status": "APPROVED"
+          "status": "ESCALATED_MANAGER"
         }
       },
-      "End": true
+      "Next": "EndCompleted"
     },
-    "NotifyRejected": {
+    "NotifyHrEscalation": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
@@ -197,10 +238,13 @@
           "leave_type.$": "$.leave_type",
           "start_date.$": "$.start_date",
           "end_date.$": "$.end_date",
-          "status": "REJECTED"
+          "status": "ESCALATED_HR"
         }
       },
-      "End": true
+      "Next": "EndCompleted"
+    },
+    "EndCompleted": {
+      "Type": "Succeed"
     }
   }
 }
