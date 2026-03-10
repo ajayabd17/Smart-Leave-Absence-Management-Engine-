@@ -307,10 +307,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const submitBtn = configForm.querySelector('button[type="submit"]');
             setButtonLoading(submitBtn, true, 'Updating...');
             try {
-                await apiRequest('/leave/update', 'PUT', {
+                const payload = {
                     leave_type: document.getElementById('config-leave-type').value.toUpperCase(),
                     annual_quota: parseInt(document.getElementById('config-annual-quota').value, 10)
-                });
+                };
+                try {
+                    await apiRequest('/leave/config/update', 'PUT', payload);
+                } catch (primaryErr) {
+                    await apiRequest('/leave/update', 'PUT', payload);
+                }
                 showToast('Leave configuration updated successfully.', 'success');
                 configForm.reset();
             } catch (error) {

@@ -51,10 +51,21 @@ def resolve_identity(event):
     return row
 
 
+def normalize_role(role_value):
+    value = str(role_value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if value in ["hr_admin", "hradmin"]:
+        return "HR_Admin"
+    if value == "manager":
+        return "Manager"
+    if value == "employee":
+        return "Employee"
+    return str(role_value or "")
+
+
 def lambda_handler(event, context):
     try:
         identity = resolve_identity(event)
-        if identity.get("role") != "HR_Admin":
+        if normalize_role(identity.get("role")) != "HR_Admin":
             return json_response(403, {"error": "Only HR can update leave quotas"})
 
         body = json.loads(event["body"]) if isinstance(event.get("body"), str) else (event.get("body") or {})

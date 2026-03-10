@@ -107,8 +107,9 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
         }
 
         if (response.status === 403) {
-            showToast('You do not have permission to perform this action.', 'error');
-            throw new Error('Forbidden');
+            const forbiddenMessage = responseData.message || responseData.error || 'You do not have permission to perform this action.';
+            showToast(forbiddenMessage, 'error');
+            throw new Error(forbiddenMessage);
         }
 
         if (response.status >= 500) {
