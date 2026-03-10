@@ -112,8 +112,9 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
         }
 
         if (response.status >= 500) {
-            showToast('Server error occurred. Please try again later.', 'error');
-            throw new Error('Server Error');
+            const serverMessage = responseData.message || responseData.error || 'Server error occurred. Please try again later.';
+            showToast(serverMessage, 'error');
+            throw new Error(serverMessage);
         }
 
         if (!response.ok) {
