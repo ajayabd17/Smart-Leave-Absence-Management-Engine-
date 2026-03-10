@@ -28,8 +28,8 @@
                     id="user-avatar">
 
                 <div class="user-info">
-                    <h4 id="user-name">Alex Manager</h4>
-                    <p id="user-role">HR Admin</p>
+                    <h4 id="user-name">-</h4>
+                    <p id="user-role">-</p>
                 </div>
                 <button class="icon-btn" id="logout-btn" title="Logout"><i
                         class="fa-solid fa-right-from-bracket"></i></button>
@@ -45,7 +45,7 @@
                     <input type="text" placeholder="Search...">
                 </div>
                 <div class="header-actions">
-                    <button class="icon-btn"><i class="fa-regular fa-bell"></i><span class="badge">3</span></button>
+                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
                     <button class="icon-btn theme-toggle" id="theme-toggle"><i class="fa-solid fa-moon"></i></button>
                 </div>
             </header>
@@ -94,10 +94,7 @@
                         <div class="form-group" style="flex: 1; min-width: 200px;">
                             <label for="allot-leave-type">Leave Type</label>
                             <select id="allot-leave-type" required>
-                                <option value="Earned">Earned</option>
-                                <option value="Sick">Sick</option>
-                                <option value="Casual">Casual</option>
-                                <option value="Unpaid">Unpaid</option>
+                                <option value="">Loading leave types...</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex: 1; min-width: 150px;">
@@ -118,10 +115,7 @@
                         <div class="form-group" style="flex: 1; min-width: 200px;">
                             <label for="config-leave-type">Leave Type</label>
                             <select id="config-leave-type" required>
-                                <option value="Annual">Annual</option>
-                                <option value="Sick">Sick</option>
-                                <option value="Casual">Casual</option>
-                                <option value="Earned">Earned</option>
+                                <option value="">Loading leave types...</option>
                             </select>
                         </div>
                         <div class="form-group" style="flex: 1; min-width: 150px;">
@@ -150,54 +144,12 @@
                             <div class="card-header">
                                 <h2>Team Leave Calendar</h2>
                                 <div class="calendar-nav">
-                                    <button><i class="fa-solid fa-chevron-left"></i></button>
-                                    <span>November 2026</span>
-                                    <button><i class="fa-solid fa-chevron-right"></i></button>
+                                    <button id="calendar-prev-btn" type="button" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></button>
+                                    <span id="calendar-month-label">-</span>
+                                    <button id="calendar-next-btn" type="button" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></button>
                                 </div>
                             </div>
-                            <div class="calendar-grid">
-                                <div class="day-name">Su</div>
-                                <div class="day-name">Mo</div>
-                                <div class="day-name">Tu</div>
-                                <div class="day-name">We</div>
-                                <div class="day-name">Th</div>
-                                <div class="day-name">Fr</div>
-                                <div class="day-name">Sa</div>
-                                <!-- Empty starting days -->
-                                <div class="day empty"></div>
-                                <div class="day empty"></div>
-                                <!-- Dates (mocked) -->
-                                <div class="day">1</div>
-                                <div class="day">2</div>
-                                <div class="day">3</div>
-                                <div class="day">4</div>
-                                <div class="day weekend">5</div>
-                                <div class="day weekend">6</div>
-                                <div class="day">7</div>
-                                <div class="day">8</div>
-                                <div class="day">9</div>
-                                <div class="day" id="cal-day-10">10</div>
-                                <div class="day" id="cal-day-11">11</div>
-                                <div class="day weekend">12</div>
-                                <div class="day weekend">13</div>
-                                <div class="day">14</div>
-                                <div class="day" id="cal-day-15">15</div>
-                                <div class="day">16</div>
-                                <div class="day">17</div>
-                                <div class="day">18</div>
-                                <div class="day weekend">19</div>
-                                <div class="day weekend">20</div>
-                                <div class="day">21</div>
-                                <div class="day">22</div>
-                                <div class="day">23</div>
-                                <div class="day">24</div>
-                                <div class="day">25</div>
-                                <div class="day weekend">26</div>
-                                <div class="day weekend">27</div>
-                                <div class="day">28</div>
-                                <div class="day">29</div>
-                                <div class="day">30</div>
-                            </div>
+                            <div class="calendar-grid" id="calendar-grid"></div>
                             <div class="calendar-legend">
                                 <div><span class="dot red"></span> Sick</div>
                                 <div><span class="dot blue"></span> Earned</div>
@@ -230,7 +182,6 @@
         </div>
     </div>
 
-    <script src="data-mock.js"></script>
     <script src="common.js"></script>
     <script src="hr-admin.js"></script>
 </body>

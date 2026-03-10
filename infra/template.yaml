@@ -1,0 +1,351 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SmartLeave end-to-end serverless stack
+
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: http://localhost:8000
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+  SesFromEmail:
+    Type: String
+  ApprovalBaseUrl:
+    Type: String
+    Default: http://localhost:8000
+  ApprovalTokenSecret:
+    Type: String
+    NoEcho: true
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    CodeUri: ../backend/src
+    Environment:
+      Variables:
+        LEAVE_REQUESTS_TABLE: !Ref LeaveRequestsTable
+        LEAVE_BALANCES_TABLE: !Ref LeaveBalancesTable
+        LEAVE_CONFIG_TABLE: !Ref LeaveConfigTable
+        EMPLOYEE_DIRECTORY_TABLE: !Ref EmployeeDirectoryTable
+        APPROVAL_TOKENS_TABLE: !Ref ApprovalTokensTable
+        LEAVE_REQUEST_ID_INDEX: request_id-index
+        EMPLOYEE_EMAIL_INDEX: email_lower-index
+        SES_FROM_EMAIL: !Ref SesFromEmail
+        APPROVAL_BASE_URL: !Ref ApprovalBaseUrl
+        APPROVAL_TOKEN_SECRET: !Ref ApprovalTokenSecret
+        NOTIFICATION_FUNCTION_NAME: !Ref SendEmployeeNotificationFunction
+    Policies:
+      - AWSLambdaBasicExecutionRole
+      - DynamoDBCrudPolicy:
+          TableName: !Ref LeaveRequestsTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref LeaveBalancesTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref LeaveConfigTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref EmployeeDirectoryTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref ApprovalTokensTable
+      - Statement:
+          - Effect: Allow
+            Action:
+              - states:StartExecution
+            Resource: !Ref LeaveRequestStateMachine
+      - Statement:
+          - Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource: "*"
+
+Resources:
+  LeaveHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - OPTIONS
+        AllowHeaders:
+          - authorization
+          - content-type
+      Auth:
+        Authorizers:
+          CognitoJwt:
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}
+              audience:
+                - !Ref CognitoClientId
+            IdentitySource: "$request.header.Authorization"
+        DefaultAuthorizer: CognitoJwt
+
+  LeaveRequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: request_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+        - AttributeName: request_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: request_id-index
+          KeySchema:
+            - AttributeName: request_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  LeaveBalancesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: leave_type#year
+          AttributeType: S
+      KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+        - AttributeName: leave_type#year
+          KeyType: RANGE
+
+  LeaveConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: year
+          AttributeType: S
+        - AttributeName: leave_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: year
+          KeyType: HASH
+        - AttributeName: leave_type
+          KeyType: RANGE
+
+  EmployeeDirectoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_sub
+          AttributeType: S
+        - AttributeName: email_lower
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_sub
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: email_lower-index
+          KeySchema:
+            - AttributeName: email_lower
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  ApprovalTokensTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: token_hash
+          AttributeType: S
+      KeySchema:
+        - AttributeName: token_hash
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: exp
+        Enabled: true
+
+  GetLeaveConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.get_leave_config_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/config
+            Method: GET
+
+  IdentityMeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.identity_me_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /identity/me
+            Method: GET
+
+  UpdateLeaveConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.update_leave_config_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/config/update
+            Method: POST
+
+  GetLeaveBalanceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.get_leave_balance_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/balance
+            Method: GET
+
+  GetLeaveHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.get_leave_history_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/history
+            Method: GET
+
+  CreateLeaveRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.create_leave_request_handler
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref LeaveRequestStateMachine
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/apply
+            Method: POST
+
+  GetPendingApprovalsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.get_pending_approvals_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/pending
+            Method: GET
+
+  ManagerDecisionHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.manager_decision_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/approve
+            Method: POST
+
+  UpdateLeaveQuotaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.update_leave_quota_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/update-quota
+            Method: POST
+
+  TeamCalendarFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.team_calendar_handler
+      Events:
+        ApiRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref LeaveHttpApi
+            Path: /leave/calendar
+            Method: GET
+
+  SendEmployeeNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.send_employee_notification_handler
+
+  GenerateManagerLinksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.generate_manager_links_handler
+
+  AccrualProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers.accrual_processor_handler
+
+  WeeklyAccrualRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Weekly leave accrual processor
+      ScheduleExpression: cron(0 9 ? * MON *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AccrualProcessorFunction.Arn
+          Id: AccrualProcessorTarget
+
+  PermissionForEventsToInvokeAccrual:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AccrualProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklyAccrualRule.Arn
+
+  LeaveRequestStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: LeaveRequestStateMachine
+      Type: STANDARD
+      Definition:
+        StartAt: GenerateManagerLinks
+        States:
+          GenerateManagerLinks:
+            Type: Task
+            Resource: !GetAtt GenerateManagerLinksFunction.Arn
+            End: true
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref GenerateManagerLinksFunction
+
+Outputs:
+  ApiBaseUrl:
+    Value: !Sub https://${LeaveHttpApi}.execute-api.${AWS::Region}.amazonaws.com

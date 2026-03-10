@@ -765,6 +765,11 @@ textarea:focus {
     position: relative;
 }
 
+.day.today {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
 .dot {
     width: 6px;
     height: 6px;

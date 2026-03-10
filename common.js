@@ -1,6 +1,33 @@
-// --- AWS API Configuration ---
-// Update this to your real AWS API Gateway URL when available
-const API_BASE_URL = 'https://ivktwzvx88.execute-api.ap-south-1.amazonaws.com';
+// --- Runtime App Configuration ---
+const DEFAULT_APP_CONFIG = {
+    API_BASE_URL: 'https://ivktwzvx88.execute-api.ap-south-1.amazonaws.com',
+    AWS_REGION: 'ap-south-1',
+    COGNITO_APP_CLIENT_ID: ''
+};
+
+function getAppConfig() {
+    let stored = {};
+    try {
+        stored = JSON.parse(localStorage.getItem('smartleave_config') || '{}');
+    } catch (e) {
+        stored = {};
+    }
+    const runtime = (window.SMARTLEAVE_CONFIG && typeof window.SMARTLEAVE_CONFIG === 'object')
+        ? window.SMARTLEAVE_CONFIG
+        : {};
+    return { ...DEFAULT_APP_CONFIG, ...stored, ...runtime };
+}
+
+function setAppConfig(partialConfig) {
+    const current = getAppConfig();
+    const merged = { ...current, ...(partialConfig || {}) };
+    localStorage.setItem('smartleave_config', JSON.stringify(merged));
+    return merged;
+}
+
+const APP_CONFIG = getAppConfig();
+const API_BASE_URL = APP_CONFIG.API_BASE_URL;
+window.setSmartLeaveConfig = setAppConfig;
 
 /**
  * Reusable helper method to make all calls to AWS Serverless API.
@@ -158,6 +185,14 @@ function parseJwt(token) {
     }
 }
 
+function normalizeRoleValue(role) {
+    const value = String(role || '').trim().toLowerCase();
+    if (value === 'hr_admin' || value === 'hr admin' || value === 'hr-admin') return 'HR_Admin';
+    if (value === 'manager') return 'Manager';
+    if (value === 'employee') return 'Employee';
+    return role;
+}
+
 /**
  * Validates Cognito JWT and checks if user has allowed role/hierarchy
  * @param {Array<string>} allowedGroups - Array of allowed Cognito groups (e.g. ['Employee', 'Manager'])
@@ -194,12 +229,13 @@ function checkCognitoAuth(allowedGroups) {
     // 4. Hierarchy Check: 
     // AWS Cognito typically adds groups to the "cognito:groups" claim
     // Alternatively, you might be using a custom attribute like "custom:role"
-    const userGroups = payload['cognito:groups'] || [];
-    const customRole = payload['custom:role']; // If you use an attribute instead of groups
+    const userGroups = (payload['cognito:groups'] || []).map(normalizeRoleValue);
+    const customRole = normalizeRoleValue(payload['custom:role']); // If you use an attribute instead of groups
+    const normalizedAllowed = (allowedGroups || []).map(normalizeRoleValue);
 
     // Logic: check against allowed groups or a specific custom role
-    const hasGroupAccess = allowedGroups.some(group => userGroups.includes(group));
-    const hasCustomRoleAccess = allowedGroups.includes(customRole);
+    const hasGroupAccess = normalizedAllowed.some(group => userGroups.includes(group));
+    const hasCustomRoleAccess = normalizedAllowed.includes(customRole);
 
     if (!hasGroupAccess && !hasCustomRoleAccess) {
         console.error('Unauthorized: User does not have access to this page');

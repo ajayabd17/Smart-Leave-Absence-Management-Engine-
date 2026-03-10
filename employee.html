@@ -28,8 +28,8 @@
                     id="user-avatar">
 
                 <div class="user-info">
-                    <h4 id="user-name">John Employee</h4>
-                    <p id="user-role">Software Engineer</p>
+                    <h4 id="user-name">-</h4>
+                    <p id="user-role">-</p>
                 </div>
                 <button class="icon-btn" id="logout-btn" title="Logout"><i
                         class="fa-solid fa-right-from-bracket"></i></button>
@@ -45,7 +45,7 @@
                     <input type="text" placeholder="Search...">
                 </div>
                 <div class="header-actions">
-                    <button class="icon-btn"><i class="fa-regular fa-bell"></i><span class="badge">3</span></button>
+                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
                     <button class="icon-btn theme-toggle" id="theme-toggle"><i class="fa-solid fa-moon"></i></button>
                 </div>
             </header>
@@ -59,46 +59,7 @@
 
                 <!-- Stats summary -->
                 <div class="balance-cards" id="balance-cards">
-                    <div class="card balance-card">
-                        <div class="card-icon green"><i class="fa-solid fa-plane"></i></div>
-                        <div class="card-details">
-                            <h3>Earned Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left" id="earned-used">-<span>d</span></span>
-                                <span class="total-days" id="earned-total">/ -</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card balance-card">
-                        <div class="card-icon red"><i class="fa-solid fa-briefcase-medical"></i></div>
-                        <div class="card-details">
-                            <h3>Sick Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left" id="sick-used">-<span>d</span></span>
-                                <span class="total-days" id="sick-total">/ -</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card balance-card">
-                        <div class="card-icon blue"><i class="fa-solid fa-mug-hot"></i></div>
-                        <div class="card-details">
-                            <h3>Casual Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left" id="casual-used">-<span>d</span></span>
-                                <span class="total-days" id="casual-total">/ -</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card balance-card">
-                        <div class="card-icon orange"><i class="fa-solid fa-wallet"></i></div>
-                        <div class="card-details">
-                            <h3>Unpaid Leave</h3>
-                            <div class="flex-row">
-                                <span class="days-left" id="unpaid-used">-<span>d</span></span>
-                                <span class="total-days" id="unpaid-total">/ -</span>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="card"><p class="text-muted">Loading leave balances...</p></div>
                 </div>
 
                 <div class="dashboard-grid">
@@ -109,10 +70,7 @@
                             <div class="form-group">
                                 <label for="leave-type">Leave Type</label>
                                 <select id="leave-type" required>
-                                    <option value="Earned">Earned Leave</option>
-                                    <option value="Sick">Sick Leave</option>
-                                    <option value="Casual">Casual Leave</option>
-                                    <option value="Unpaid">Unpaid Leave</option>
+                                    <option value="">Loading leave types...</option>
                                 </select>
                             </div>
                             <div class="form-row">
@@ -166,7 +124,6 @@
         </div>
     </div>
 
-    <script src="data-mock.js"></script>
     <script src="common.js"></script>
     <script src="employee.js"></script>
 </body>

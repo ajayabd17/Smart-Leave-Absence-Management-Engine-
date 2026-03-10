@@ -14,9 +14,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const usernameInput = document.getElementById('cognito-username');
 
     // AWS Config
-    AWS.config.region = 'ap-south-1'; // Replace with your region
+    AWS.config.region = APP_CONFIG.AWS_REGION || 'ap-south-1';
     const cognitoidentityserviceprovider = new AWS.CognitoIdentityServiceProvider();
-    const APP_CLIENT_ID = '2a98a6f4c48ogvpcmcsgugv3rm';
+    const APP_CLIENT_ID = APP_CONFIG.COGNITO_APP_CLIENT_ID;
+
+    if (!APP_CLIENT_ID) {
+        showToast('Missing Cognito App Client configuration.', 'error');
+        loginForm.querySelector('button[type="submit"]').disabled = true;
+        return;
+    }
 
     function normalizeRole(role) {
         const value = String(role || '').trim().toLowerCase();

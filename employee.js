@@ -45,7 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const configResponse = await apiRequest('/leave/config');
             const configRows = Array.isArray(configResponse) ? configResponse : (configResponse.data || []);
-            if (!Array.isArray(configRows) || configRows.length === 0) return;
+            if (!Array.isArray(configRows) || configRows.length === 0) {
+                leaveTypeSelect.innerHTML = '<option value="">No leave types available</option>';
+                return;
+            }
 
             leaveTypeSelect.innerHTML = '';
             configRows.forEach((item) => {
@@ -58,6 +61,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (err) {
             console.warn('Leave config API unavailable, using static leave type options.');
+            if (!leaveTypeSelect.value) {
+                leaveTypeSelect.innerHTML = `
+                    <option value="earned">Earned Leave</option>
+                    <option value="sick">Sick Leave</option>
+                    <option value="casual">Casual Leave</option>
+                    <option value="unpaid">Unpaid Leave</option>
+                `;
+            }
         }
     }
 
@@ -163,6 +174,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const applyLeaveForm = document.getElementById('apply-leave-form');
+    const dateFromInput = document.getElementById('date-from');
+    const dateToInput = document.getElementById('date-to');
+
+    function setupDateConstraints() {
+        if (!dateFromInput || !dateToInput) return;
+        const today = new Date();
+        const minDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        dateFromInput.min = minDate;
+        dateToInput.min = minDate;
+
+        dateFromInput.addEventListener('change', () => {
+            const fromVal = dateFromInput.value;
+            if (!fromVal) return;
+            dateToInput.min = fromVal;
+            if (dateToInput.value && dateToInput.value < fromVal) {
+                dateToInput.value = fromVal;
+            }
+        });
+    }
+
+    setupDateConstraints();
+
     if (applyLeaveForm) {
         applyLeaveForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -204,4 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     refreshEmployeeDashboard();
+
+    const refreshMs = 45000;
+    setInterval(() => {
+        if (document.hidden) return;
+        refreshEmployeeDashboard();
+    }, refreshMs);
 });
