@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import boto3
+from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr
 
 
@@ -19,11 +20,34 @@ def decimal_default(obj):
 
 
 def resolve_identity(event):
-    claims = event["requestContext"]["authorizer"]["jwt"]["claims"]
-    user_sub = claims["sub"]
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims", {})
+    )
+    if not claims:
+        raise PermissionError("Missing JWT claims. Configure route authorization as JWT.")
+
+    user_sub = claims.get("sub")
+    if not user_sub:
+        raise PermissionError("Missing user sub in JWT claims")
+
     row = directory_table.get_item(Key={"user_sub": user_sub}).get("Item")
     if not row:
-        raise Exception("User not registered")
+        raise PermissionError("User not registered in employee_directory")
+
+    if not row.get("role"):
+        groups = claims.get("cognito:groups", [])
+        if isinstance(groups, str):
+            groups = [g.strip() for g in groups.replace("[", "").replace("]", "").split(",") if g.strip()]
+        if "HR_Admin" in groups:
+            row["role"] = "HR_Admin"
+        elif "Manager" in groups:
+            row["role"] = "Manager"
+        else:
+            row["role"] = "Employee"
+
     return row
 
 
@@ -35,21 +59,36 @@ def parse_body(event):
     return event["body"]
 
 
+def json_response(code, payload):
+    return {
+        "statusCode": code,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(payload, default=decimal_default),
+    }
+
+
+def normalize_role(role_value):
+    value = str(role_value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if value in ["hr_admin", "hradmin"]:
+        return "HR_Admin"
+    if value == "manager":
+        return "Manager"
+    if value == "employee":
+        return "Employee"
+    return str(role_value or "")
+
+
 def lambda_handler(event, context):
     try:
         method = (event.get("requestContext", {}).get("http", {}).get("method") or "").upper()
         if method == "GET":
             year = (event.get("queryStringParameters") or {}).get("year", str(datetime.now(timezone.utc).year))
             rows = config_table.scan(FilterExpression=Attr("year").eq(year)).get("Items", [])
-            return {
-                "statusCode": 200,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps(rows, default=decimal_default),
-            }
+            return json_response(200, rows)
 
         identity = resolve_identity(event)
-        if identity.get("role") != "HR_Admin":
-            return {"statusCode": 403, "body": json.dumps({"error": "Only HR can update leave configuration"})}
+        if normalize_role(identity.get("role")) != "HR_Admin":
+            return json_response(403, {"error": "Only HR can update leave configuration"})
 
         body = parse_body(event)
         leave_type = body["leave_type"].lower()
@@ -70,6 +109,14 @@ def lambda_handler(event, context):
             }
         )
 
-        return {"statusCode": 200, "body": json.dumps({"message": "Leave configuration updated successfully"})}
+        return json_response(200, {"message": "Leave configuration updated successfully"})
+    except PermissionError as err:
+        return json_response(403, {"error": str(err)})
+    except KeyError as err:
+        return json_response(400, {"error": f"Missing field: {str(err)}"})
+    except ValueError as err:
+        return json_response(400, {"error": str(err)})
+    except ClientError as err:
+        return json_response(500, {"error": f"DynamoDB error: {err.response.get('Error', {}).get('Message', str(err))}"})
     except Exception as err:
-        return {"statusCode": 500, "body": json.dumps({"error": str(err)})}
+        return json_response(500, {"error": str(err)})

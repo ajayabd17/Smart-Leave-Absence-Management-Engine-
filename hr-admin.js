@@ -255,6 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rows.forEach((item) => {
                 const leaveType = String(item.leave_type || item.type || '').trim();
                 if (!leaveType) return;
+                if (leaveType.toLowerCase() === 'unpaid') return;
                 const label = item.display_name || leaveType;
                 if (quotaType) {
                     const opt = document.createElement('option');
@@ -311,11 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     leave_type: document.getElementById('config-leave-type').value.toUpperCase(),
                     annual_quota: parseInt(document.getElementById('config-annual-quota').value, 10)
                 };
-                try {
-                    await apiRequest('/leave/config/update', 'PUT', payload);
-                } catch (primaryErr) {
-                    await apiRequest('/leave/update', 'PUT', payload);
-                }
+                await apiRequest('/leave/config/update', 'PUT', payload);
                 showToast('Leave configuration updated successfully.', 'success');
                 configForm.reset();
             } catch (error) {

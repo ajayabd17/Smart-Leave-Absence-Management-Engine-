@@ -122,6 +122,30 @@ def send_auto_reject_email(employee_email, request_id, reason):
     )
 
 
+def send_submitted_email(employee_email, request_id, leave_type, start_date, end_date, total_days):
+    if not employee_email or not SES_FROM_EMAIL:
+        return
+    ses.send_email(
+        Source=SES_FROM_EMAIL,
+        Destination={"ToAddresses": [employee_email]},
+        Message={
+            "Subject": {"Data": "Leave request submitted"},
+            "Body": {
+                "Text": {
+                    "Data": (
+                        f"Your leave request has been submitted.\n"
+                        f"Request ID: {request_id}\n"
+                        f"Leave Type: {leave_type}\n"
+                        f"Dates: {start_date} to {end_date}\n"
+                        f"Total Days: {total_days}\n"
+                        f"Status: PENDING"
+                    )
+                }
+            },
+        },
+    )
+
+
 def lambda_handler(event, context):
     try:
         body = parse_body(event)
@@ -140,11 +164,20 @@ def lambda_handler(event, context):
         total_days = calculate_days(start_date, end_date)
         year = str(start.year)
 
-        config = get_leave_config(leave_type, year)
-        if not config:
-            return json_response(400, {"error": "Leave type not configured"})
-        if not bool(config.get("is_active", True)):
-            return json_response(400, {"error": "Leave type inactive"})
+        # Unpaid leave is always allowed and does not require config/quota records.
+        if leave_type == "unpaid":
+            config = {
+                "leave_type": "unpaid",
+                "is_active": True,
+                "requires_balance": False,
+                "requires_hr_after_days": 5,
+            }
+        else:
+            config = get_leave_config(leave_type, year)
+            if not config:
+                return json_response(400, {"error": "Leave type not configured"})
+            if not bool(config.get("is_active", True)):
+                return json_response(400, {"error": "Leave type inactive"})
 
         if check_overlap(employee_id, start_date, end_date):
             return json_response(400, {"error": "Leave request overlaps with existing leave"})
@@ -229,6 +262,16 @@ def lambda_handler(event, context):
                     "requested_at": datetime.now(timezone.utc).isoformat(),
                 }
             ),
+        )
+
+        # Requirement: employee receives email at submission stage.
+        send_submitted_email(
+            identity["email"],
+            request_id,
+            leave_type,
+            start_date,
+            end_date,
+            total_days,
         )
 
         return json_response(

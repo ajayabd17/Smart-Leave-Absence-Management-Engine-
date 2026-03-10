@@ -59,6 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.textContent = label;
                 leaveTypeSelect.appendChild(option);
             });
+
+            // Business rule: unpaid leave is always available even without config row.
+            if (!Array.from(leaveTypeSelect.options).some((opt) => normalizeType(opt.value) === 'unpaid')) {
+                const unpaid = document.createElement('option');
+                unpaid.value = 'unpaid';
+                unpaid.textContent = 'Unpaid Leave';
+                leaveTypeSelect.appendChild(unpaid);
+            }
         } catch (err) {
             console.warn('Leave config API unavailable, using static leave type options.');
             if (!leaveTypeSelect.value) {

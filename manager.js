@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rows.forEach((item) => {
                 const leaveType = String(item.leave_type || item.type || '').trim();
                 if (!leaveType) return;
+                if (leaveType.toLowerCase() === 'unpaid') return;
                 const option = document.createElement('option');
                 option.value = leaveType.toUpperCase();
                 option.textContent = item.display_name || leaveType;
