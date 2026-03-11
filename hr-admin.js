@@ -402,6 +402,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'blue';
     }
 
+    function buildTypeMarkers(leaveItems) {
+        const seen = new Set();
+        const colors = [];
+        (leaveItems || []).forEach((item) => {
+            const color = getTypeColor(item.leave_type);
+            if (!seen.has(color)) {
+                seen.add(color);
+                colors.push(color);
+            }
+        });
+        return colors.slice(0, 4);
+    }
+
     function buildMonthLeaveMap() {
         const map = new Map();
         const monthStart = new Date(activeMonth.getFullYear(), activeMonth.getMonth(), 1);
@@ -467,7 +480,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let html = `${dayNum}`;
             if (leaveItems.length > 0) {
-                html += `<span class="dot ${getTypeColor(leaveItems[0].leave_type)}"></span>`;
+                const markers = buildTypeMarkers(leaveItems)
+                    .map((color) => `<span class="dot ${color}"></span>`)
+                    .join('');
+                html += `<span class="dot-stack">${markers}</span>`;
                 const tip = leaveItems
                     .map((x) => `${x.employee_id || 'Employee'} (${x.leave_type || 'Leave'})`)
                     .slice(0, 4)
@@ -564,13 +580,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         hrRows.forEach((req) => {
-            const requestId = getRequestId(req);
-            const actionable = isHrPendingItem(req);
             const status = statusLabel(req.status);
+            const actionable = isHrPendingItem(req);
             const actionCell = actionable
-                ? `<button class="btn btn-primary approve-btn" data-request-id="${safeText(requestId)}" data-leave-type="${safeText(req.leave_type || '')}" style="padding: 5px 10px; font-size: 0.8rem; margin-right: 5px;">Approve</button>
-                   <button class="btn btn-outline hover-red reject-btn" data-request-id="${safeText(requestId)}" data-leave-type="${safeText(req.leave_type || '')}" style="padding: 5px 10px; font-size: 0.8rem;">Reject</button>`
-                : (normalizeValue(req.status) === 'MANAGER_APPROVED' ? 'Waiting for HR decision' : 'Completed');
+                ? 'Approve/Reject via signed email link'
+                : 'Completed';
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -586,35 +600,6 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             listContainer.appendChild(tr);
         });
-
-        document.querySelectorAll('.approve-btn').forEach((btn) => {
-            btn.addEventListener('click', () => handleDecision(btn, 'APPROVED'));
-        });
-        document.querySelectorAll('.reject-btn').forEach((btn) => {
-            btn.addEventListener('click', () => handleDecision(btn, 'REJECTED'));
-        });
-    }
-
-    async function handleDecision(button, decision) {
-        const requestId = button.getAttribute('data-request-id');
-        const leaveType = button.getAttribute('data-leave-type') || '';
-        setButtonLoading(button, true, decision === 'APPROVED' ? 'Approving...' : 'Rejecting...');
-        try {
-            const qs = new URLSearchParams({
-                request_id: requestId,
-                decision: decision
-            }).toString();
-            await apiRequest(`/leave/approve?${qs}`, 'GET');
-            if (typeof window.__appendHrDecisionNotification === 'function') {
-                window.__appendHrDecisionNotification(requestId, decision, { leave_type: leaveType });
-            }
-            showToast(`Leave request ${decision.toLowerCase()} successfully.`, 'success');
-            await refreshHrDashboard();
-        } catch (error) {
-            console.error('HR decision failed', error);
-        } finally {
-            setButtonLoading(button, false);
-        }
     }
 
     async function loadCalendarData() {
@@ -731,17 +716,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const pdfBtn = document.getElementById('download-pdf-btn');
         if (pdfBtn) {
             pdfBtn.addEventListener('click', async () => {
+                const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=980,height=700');
                 try {
-                    await downloadReport('pdf');
+                    await downloadReport('pdf', printWindow);
                     showToast('PDF report downloaded.', 'success');
                 } catch (error) {
+                    if (printWindow && !printWindow.closed) {
+                        printWindow.close();
+                    }
                     showToast('Failed to download PDF report.', 'error');
                 }
             });
         }
     }
 
-    async function downloadReport(format) {
+    async function downloadReport(format, preopenedWindow = null) {
         const token = authStorage.get('idToken');
         const url = `${API_BASE_URL}/leave/report?format=${format}`;
         let response = null;
@@ -771,9 +760,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (fetchFailed || !response || !response.ok) {
             if (format === 'pdf') {
-                throw new Error('PDF report endpoint is unavailable. Deploy /leave/report?format=pdf.');
+                openPrintablePdfFallback('HR Leave Report', preopenedWindow);
+                return;
             }
             throw new Error('Download failed');
+        }
+        if (preopenedWindow && !preopenedWindow.closed) {
+            preopenedWindow.close();
         }
         const blob = await response.blob();
         const href = URL.createObjectURL(blob);
@@ -803,6 +796,72 @@ document.addEventListener('DOMContentLoaded', () => {
                 .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
                 .join(','))
             .join('\n');
+    }
+
+    function openPrintablePdfFallback(title, preopenedWindow = null) {
+        const rows = (calendarRows || []).map((item) => `
+            <tr>
+                <td>${escapeHtml(item.employee_id || '')}</td>
+                <td>${escapeHtml(item.leave_type || '')}</td>
+                <td>${escapeHtml(item.start_date || '')}</td>
+                <td>${escapeHtml(item.end_date || '')}</td>
+                <td>${escapeHtml(item.status || '')}</td>
+                <td>${escapeHtml(item.approval_stage || '')}</td>
+            </tr>
+        `).join('');
+
+        const html = `
+            <html>
+            <head>
+                <title>${escapeHtml(title)}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 24px; }
+                    h1 { font-size: 20px; margin-bottom: 4px; }
+                    .meta { color: #555; margin-bottom: 16px; font-size: 12px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background: #f4f6f8; }
+                </style>
+            </head>
+            <body>
+                <h1>${escapeHtml(title)}</h1>
+                <div class="meta">Generated on ${new Date().toLocaleString()}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Type</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Status</th>
+                            <th>Stage</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || '<tr><td colspan="6">No records</td></tr>'}</tbody>
+                </table>
+            </body>
+            </html>
+        `;
+
+        const printWindow = preopenedWindow || window.open('', '_blank', 'noopener,noreferrer,width=980,height=700');
+        if (!printWindow) throw new Error('Popup blocked while opening print preview.');
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+        }, 350);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch]));
     }
 
     const refreshMs = 10000;
