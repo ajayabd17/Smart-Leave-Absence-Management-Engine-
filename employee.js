@@ -310,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLeaveConfig() {
         const leaveTypeSelect = document.getElementById('leave-type');
+        const previousValue = normalizeType(leaveTypeSelect?.value || '');
         try {
             const configResponse = await apiRequest('/leave/config');
             const configRows = Array.isArray(configResponse) ? configResponse : (configResponse.data || []);
@@ -334,6 +335,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 unpaid.value = 'unpaid';
                 unpaid.textContent = 'Unpaid Leave';
                 leaveTypeSelect.appendChild(unpaid);
+            }
+
+            if (previousValue && Array.from(leaveTypeSelect.options).some((opt) => normalizeType(opt.value) === previousValue)) {
+                leaveTypeSelect.value = previousValue;
             }
         } catch (err) {
             console.warn('Leave config API unavailable, using static leave type options.');
@@ -466,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function refreshEmployeeDashboard() {
-        await Promise.all([loadLeaveBalances(), loadLeaveHistory(), loadLeaveConfig()]);
+        await Promise.all([loadLeaveBalances(), loadLeaveHistory()]);
     }
 
     const applyLeaveForm = document.getElementById('apply-leave-form');
@@ -558,6 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    loadLeaveConfig();
     refreshEmployeeDashboard();
 
     const refreshMs = 10000;
