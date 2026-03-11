@@ -9,8 +9,8 @@ from boto3.dynamodb.conditions import Attr
 
 
 dynamodb = boto3.resource("dynamodb")
-config_table = dynamodb.Table(os.environ["CONFIG_TABLE"])
-directory_table = dynamodb.Table(os.environ["DIRECTORY_TABLE"])
+config_table = dynamodb.Table(os.environ.get("CONFIG_TABLE", "leave_config"))
+directory_table = dynamodb.Table(os.environ.get("DIRECTORY_TABLE", "employee_directory"))
 
 
 def decimal_default(obj):
@@ -92,22 +92,58 @@ def lambda_handler(event, context):
 
         body = parse_body(event)
         leave_type = body["leave_type"].lower()
+        if leave_type == "unpaid":
+            return json_response(400, {"error": "Unpaid leave does not require configurable quota"})
         annual_quota = int(body["annual_quota"])
+        if annual_quota < 0:
+            return json_response(400, {"error": "annual_quota must be >= 0"})
         year = str(body.get("year", datetime.now(timezone.utc).year))
+        now_iso = datetime.now(timezone.utc).isoformat()
+        item = {
+            "leave_type": leave_type,
+            "year": year,
+            "annual_quota": annual_quota,
+            "quota": annual_quota,
+            "max_quota": annual_quota,
+            "requires_balance": bool(body.get("requires_balance", True)),
+            "requires_hr_after_days": int(body.get("requires_hr_after_days", 5)),
+            "weekly_accrual": int(body.get("weekly_accrual", body.get("accrual_per_week", 0))),
+            "accrual_per_week": int(body.get("accrual_per_week", body.get("weekly_accrual", 0))),
+            "is_active": bool(body.get("is_active", True)),
+            "updated_at": now_iso,
+            "updated_by": identity["employee_id"],
+        }
 
-        config_table.put_item(
-            Item={
-                "leave_type": leave_type,
-                "year": year,
-                "annual_quota": annual_quota,
-                "requires_balance": bool(body.get("requires_balance", leave_type != "unpaid")),
-                "requires_hr_after_days": int(body.get("requires_hr_after_days", 5)),
-                "weekly_accrual": int(body.get("weekly_accrual", 0)),
-                "is_active": bool(body.get("is_active", True)),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "updated_by": identity["employee_id"],
-            }
-        )
+        try:
+            # Preferred path for composite key table: {leave_type, year}
+            config_table.update_item(
+                Key={"leave_type": leave_type, "year": year},
+                UpdateExpression=(
+                    "SET annual_quota=:annual, quota=:quota, max_quota=:maxq, "
+                    "requires_balance=:rb, requires_hr_after_days=:hrad, "
+                    "weekly_accrual=:weekly, accrual_per_week=:apw, is_active=:active, "
+                    "updated_at=:updated, updated_by=:updated_by"
+                ),
+                ExpressionAttributeValues={
+                    ":annual": annual_quota,
+                    ":quota": annual_quota,
+                    ":maxq": annual_quota,
+                    ":rb": item["requires_balance"],
+                    ":hrad": item["requires_hr_after_days"],
+                    ":weekly": item["weekly_accrual"],
+                    ":apw": item["accrual_per_week"],
+                    ":active": item["is_active"],
+                    ":updated": now_iso,
+                    ":updated_by": identity["employee_id"],
+                },
+            )
+        except ClientError as err:
+            code = err.response.get("Error", {}).get("Code", "")
+            # Fallback for non-composite schema or key mismatch: overwrite/upsert item.
+            if code == "ValidationException":
+                config_table.put_item(Item=item)
+            else:
+                raise
 
         return json_response(200, {"message": "Leave configuration updated successfully"})
     except PermissionError as err:

@@ -29,6 +29,16 @@ def decimal_default(obj):
     raise TypeError
 
 
+def to_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ["1", "true", "yes", "y"]
+    return bool(value)
+
+
 def json_response(code, payload):
     return {
         "statusCode": code,
@@ -59,7 +69,7 @@ def resolve_identity(event):
     return {
         "employee_id": row["employee_id"],
         "user_sub": user_sub,
-        "email": email,
+        "email": email or row.get("email_lower") or row.get("email") or "",
         "manager_email": row.get("manager_email", ""),
     }
 
@@ -187,19 +197,22 @@ def lambda_handler(event, context):
         approval_stage = "MANAGER"
         auto_reason = ""
 
-        requires_balance = bool(config.get("requires_balance", leave_type != "unpaid"))
+        requires_balance = to_bool(config.get("requires_balance", leave_type != "unpaid"), leave_type != "unpaid")
         if requires_balance:
             balance_key = f"{leave_type}#{year}"
             balance_row = balance_table.get_item(
                 Key={"employee_id": employee_id, "leave_type#year": balance_key}
             ).get("Item")
             if not balance_row:
-                return json_response(400, {"error": "Leave balance missing for this type"})
-            remaining = int(balance_row.get("remaining_balance", 0))
-            if remaining < total_days:
                 status = "AUTO_REJECTED"
                 approval_stage = "FINAL"
-                auto_reason = "INSUFFICIENT_BALANCE"
+                auto_reason = "MISSING_BALANCE_RECORD"
+            else:
+                remaining = int(balance_row.get("remaining_balance", 0))
+                if remaining < total_days:
+                    status = "AUTO_REJECTED"
+                    approval_stage = "FINAL"
+                    auto_reason = "INSUFFICIENT_BALANCE"
 
         item = {
             "employee_id": employee_id,

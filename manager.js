@@ -11,6 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let activeMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     let calendarRows = [];
+    let managerNotificationItems = [];
+    let managerNotificationTab = 'inbox';
+    const managerNotificationState = { initialized: false };
 
     init();
 
@@ -50,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initDashboard() {
         const payload = checkCognitoAuth(['Manager', 'HR_Admin']);
         if (!payload) return;
+        setupManagerNotifications(payload);
 
         const userEmail = payload.email || authStorage.get('userEmail');
         if (userEmail) {
@@ -79,6 +83,268 @@ document.addEventListener('DOMContentLoaded', () => {
         bindReportButtons();
         loadLeaveTypeOptions();
         refreshManagerDashboard();
+    }
+
+    function normalizeValue(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function isManagerPendingItem(row) {
+        const stage = normalizeValue(row.approval_stage || row.stage);
+        const status = normalizeValue(row.status);
+        if (stage === 'HR' || stage === 'FINAL') return false;
+        if (status === 'MANAGER_APPROVED' || status === 'HR_APPROVED' || status === 'APPROVED' || status === 'REJECTED' || status === 'AUTO_REJECTED') {
+            return false;
+        }
+        if (stage === 'MANAGER' || stage === '') return status === '' || status === 'PENDING';
+        return false;
+    }
+
+    function setupManagerNotifications(payload) {
+        const userKey = payload.sub || payload.email || authStorage.get('userEmail') || 'manager';
+        const storagePrefix = `manager_notif_${userKey}`;
+        const seenKey = `${storagePrefix}_seen`;
+        const archiveKey = `${storagePrefix}_archived`;
+        const feedKey = `${storagePrefix}_feed`;
+        const pendingSnapshotKey = `${storagePrefix}_pending_snapshot`;
+
+        const notificationBtn = document.getElementById('manager-notification-btn');
+        const notificationBadge = document.getElementById('manager-notification-badge');
+        const notificationPanel = document.getElementById('manager-notification-panel');
+        const notificationList = document.getElementById('manager-notification-list');
+        const markAllReadBtn = document.getElementById('manager-mark-all-read-btn');
+        const tabInboxBtn = document.getElementById('manager-notif-tab-inbox');
+        const tabArchivedBtn = document.getElementById('manager-notif-tab-archived');
+        const inboxCount = document.getElementById('manager-notif-inbox-count');
+        const archivedCount = document.getElementById('manager-notif-archived-count');
+
+        function loadJson(key, fallback) {
+            try {
+                const raw = localStorage.getItem(key);
+                return raw ? JSON.parse(raw) : fallback;
+            } catch (e) {
+                return fallback;
+            }
+        }
+
+        function saveJson(key, value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        }
+
+        function getArchivedSet() {
+            return new Set(loadJson(archiveKey, []));
+        }
+
+        function setArchivedSet(setVal) {
+            saveJson(archiveKey, Array.from(setVal));
+        }
+
+        function itemId(item) {
+            return item.event_id || `${item.request_id || 'req'}::${item.event_type || 'GEN'}`;
+        }
+
+        function parseTs(item) {
+            const ts = item.created_at ? Date.parse(item.created_at) : NaN;
+            return Number.isNaN(ts) ? 0 : ts;
+        }
+
+        function relativeTime(item) {
+            const ts = parseTs(item);
+            if (!ts) return 'just now';
+            const sec = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+            if (sec < 60) return `${sec}s ago`;
+            const min = Math.floor(sec / 60);
+            if (min < 60) return `${min}m ago`;
+            const hr = Math.floor(min / 60);
+            if (hr < 24) return `${hr}h ago`;
+            return `${Math.floor(hr / 24)}d ago`;
+        }
+
+        function statusClassFromType(eventType) {
+            if (eventType === 'NEW_PENDING') return 'status-submitted';
+            if (eventType === 'REMOVED_FROM_QUEUE') return 'status-manager';
+            return 'status-submitted';
+        }
+
+        function titleFromEvent(item) {
+            if (item.event_type === 'NEW_PENDING') {
+                return `New leave request from ${item.employee_id || 'Employee'}`;
+            }
+            if (item.event_type === 'REMOVED_FROM_QUEUE') {
+                return `Request ${item.request_id} removed from pending queue`;
+            }
+            return item.title || 'Queue updated';
+        }
+
+        function appendEvent(event) {
+            const id = `${event.request_id || 'req'}::${event.event_type || 'GEN'}`;
+            if (managerNotificationItems.some((x) => itemId(x) === id)) return;
+            managerNotificationItems.unshift({
+                ...event,
+                event_id: id,
+                created_at: event.created_at || new Date().toISOString()
+            });
+            managerNotificationItems = managerNotificationItems.slice(0, 120);
+            saveJson(feedKey, managerNotificationItems);
+        }
+
+        function updateBadge() {
+            if (!notificationBadge) return;
+            const archived = getArchivedSet();
+            const seenTs = Number(localStorage.getItem(seenKey) || '0');
+            const unread = managerNotificationItems.filter((x) => !archived.has(itemId(x)) && parseTs(x) > seenTs).length;
+            if (unread > 0) {
+                notificationBadge.style.display = 'inline-flex';
+                notificationBadge.textContent = unread > 99 ? '99+' : String(unread);
+            } else {
+                notificationBadge.style.display = 'none';
+                notificationBadge.textContent = '0';
+            }
+        }
+
+        function renderPanel() {
+            if (!notificationList) return;
+            const archived = getArchivedSet();
+            const seenTs = Number(localStorage.getItem(seenKey) || '0');
+            const view = managerNotificationItems.map((x) => ({
+                item: x,
+                archived: archived.has(itemId(x)),
+                unread: parseTs(x) > seenTs
+            }));
+            const filtered = view.filter((x) => managerNotificationTab === 'inbox' ? !x.archived : x.archived);
+
+            if (inboxCount) inboxCount.textContent = String(view.filter((x) => !x.archived).length);
+            if (archivedCount) archivedCount.textContent = String(view.filter((x) => x.archived).length);
+
+            notificationList.innerHTML = '';
+            if (!filtered.length) {
+                notificationList.innerHTML = '<li class="notification-empty">No notifications yet.</li>';
+                return;
+            }
+
+            const section = document.createElement('li');
+            section.className = 'notification-section';
+            section.textContent = managerNotificationTab === 'inbox' ? 'Recent' : 'Previously';
+            notificationList.appendChild(section);
+
+            filtered.forEach((entry) => {
+                const x = entry.item;
+                const li = document.createElement('li');
+                li.className = `notification-item${entry.unread ? ' unread' : ''}`;
+                li.innerHTML = `
+                    <div class="notification-avatar">M</div>
+                    <div class="notification-content">
+                        <div class="notification-row">
+                            <div class="notification-title">${titleFromEvent(x)}</div>
+                            <div class="notification-date">${x.created_at ? new Date(x.created_at).toLocaleDateString() : '-'}</div>
+                        </div>
+                        <div class="notification-meta">${(x.leave_type || '').toUpperCase()} | ${x.start_date || '-'} to ${x.end_date || '-'}</div>
+                        <div class="notification-row">
+                            <div class="notification-time">${relativeTime(x)}</div>
+                            <span class="notification-status ${statusClassFromType(x.event_type)}">${x.event_type === 'NEW_PENDING' ? 'Pending' : 'Updated'}</span>
+                        </div>
+                    </div>
+                    ${entry.unread ? '<span class="notification-dot"></span>' : ''}
+                `;
+                li.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    const setVal = getArchivedSet();
+                    const id = itemId(x);
+                    if (setVal.has(id)) setVal.delete(id);
+                    else setVal.add(id);
+                    setArchivedSet(setVal);
+                    renderPanel();
+                    updateBadge();
+                });
+                notificationList.appendChild(li);
+            });
+        }
+
+        function setPendingNotifications(rows) {
+            const snapshot = loadJson(pendingSnapshotKey, {});
+            const next = {};
+            (rows || []).forEach((r) => {
+                const reqId = r.request_id || r.id || r.leave_id;
+                if (!reqId) return;
+                next[reqId] = {
+                    employee_id: r.employee_id || '',
+                    leave_type: r.leave_type || '',
+                    start_date: r.start_date || '',
+                    end_date: r.end_date || ''
+                };
+            });
+
+            const prevIds = new Set(Object.keys(snapshot));
+            const nextIds = new Set(Object.keys(next));
+
+            if (!managerNotificationState.initialized) {
+                Object.keys(next).forEach((reqId) => {
+                    appendEvent({
+                        event_type: 'NEW_PENDING',
+                        request_id: reqId,
+                        ...next[reqId]
+                    });
+                });
+                managerNotificationState.initialized = true;
+            } else {
+                nextIds.forEach((reqId) => {
+                    if (!prevIds.has(reqId)) {
+                        appendEvent({
+                            event_type: 'NEW_PENDING',
+                            request_id: reqId,
+                            ...next[reqId]
+                        });
+                    }
+                });
+                prevIds.forEach((reqId) => {
+                    if (!nextIds.has(reqId)) {
+                        appendEvent({
+                            event_type: 'REMOVED_FROM_QUEUE',
+                            request_id: reqId,
+                            ...(snapshot[reqId] || {})
+                        });
+                    }
+                });
+            }
+            saveJson(pendingSnapshotKey, next);
+            renderPanel();
+            updateBadge();
+        }
+
+        window.__setManagerPendingNotifications = setPendingNotifications;
+
+        managerNotificationItems = loadJson(feedKey, []);
+        renderPanel();
+        updateBadge();
+
+        tabInboxBtn?.addEventListener('click', () => {
+            managerNotificationTab = 'inbox';
+            tabInboxBtn.classList.add('active');
+            tabArchivedBtn?.classList.remove('active');
+            renderPanel();
+        });
+        tabArchivedBtn?.addEventListener('click', () => {
+            managerNotificationTab = 'archived';
+            tabArchivedBtn.classList.add('active');
+            tabInboxBtn?.classList.remove('active');
+            renderPanel();
+        });
+        markAllReadBtn?.addEventListener('click', () => {
+            localStorage.setItem(seenKey, String(Date.now()));
+            updateBadge();
+            renderPanel();
+        });
+        notificationBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = notificationPanel.style.display === 'block';
+            notificationPanel.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) renderPanel();
+        });
+        document.addEventListener('click', (e) => {
+            if (notificationPanel && notificationBtn && !notificationPanel.contains(e.target) && !notificationBtn.contains(e.target)) {
+                notificationPanel.style.display = 'none';
+            }
+        });
     }
 
     async function loadLeaveTypeOptions() {
@@ -284,16 +550,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const response = await apiRequest('/leave/pending', 'GET');
         const rows = Array.isArray(response) ? response : (response.items || response.data || []);
-        document.getElementById('stat-pending').textContent = Array.isArray(rows) ? rows.length : 0;
+        const managerRows = rows.filter(isManagerPendingItem);
+        if (typeof window.__setManagerPendingNotifications === 'function') {
+            window.__setManagerPendingNotifications(managerRows);
+        }
+        document.getElementById('stat-pending').textContent = String(managerRows.length);
 
         if (!list) return;
         list.innerHTML = '';
-        if (!Array.isArray(rows) || rows.length === 0) {
+        if (!Array.isArray(managerRows) || managerRows.length === 0) {
             list.innerHTML = '<li style="padding:20px; text-align:center;">No pending approvals.</li>';
             return;
         }
 
-        rows.forEach((req) => {
+        managerRows.forEach((req) => {
             const li = document.createElement('li');
             li.className = 'approval-item';
             li.innerHTML = `
@@ -344,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(href);
     }
 
-    const refreshMs = 45000;
+    const refreshMs = 10000;
     setInterval(() => {
         if (document.hidden) return;
         refreshManagerDashboard();
