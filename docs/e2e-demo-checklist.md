@@ -15,6 +15,23 @@
 - Screenshot: SES approval/rejection email in inbox.
 - Screenshot: updated leave balance and calendar entry.
 
+## Manager Dashboard E2E (Model Alignment)
+1. Login as a `Manager` user.
+2. Open `manager.html`.
+3. Verify `Pending Approvals` list contains only manager-stage requests:
+- `approval_stage=MANAGER` (or blank) and `status=PENDING`.
+- No HR-stage request should be shown.
+4. Verify notification bell:
+- New manager requests appear as `NEW_PENDING`.
+- Items removed from queue appear as `REMOVED_FROM_QUEUE`.
+- HR-only requests must not appear.
+5. Verify team leave calendar:
+- Calendar shows approved absences only (no pending rows).
+- Month navigation updates day markers and stats.
+6. Verify report downloads:
+- `CSV` download succeeds (API report or frontend fallback CSV).
+- `PDF` download succeeds when `/leave/report?format=pdf` is available.
+
 ## Repo artifacts
 - DynamoDB schema: `infra/dynamodb-schema.md`
 - State machine definition: `infra/step-functions/leave-approval-state-machine.asl.json`

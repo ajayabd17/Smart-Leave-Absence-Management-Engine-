@@ -10,10 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextBtn = document.getElementById('calendar-next-btn');
 
     let activeMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    let selectedDateKey = todayKey;
     let calendarRows = [];
     let managerNotificationItems = [];
     let managerNotificationTab = 'inbox';
     const managerNotificationState = { initialized: false };
+    let currentManagerEmail = '';
 
     init();
 
@@ -57,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const userEmail = payload.email || authStorage.get('userEmail');
         if (userEmail) {
+            currentManagerEmail = String(userEmail).trim().toLowerCase();
             document.getElementById('user-name').textContent = userEmail.split('@')[0];
             document.getElementById('user-role').textContent = authStorage.get('role') || 'Manager';
         }
@@ -89,14 +92,67 @@ document.addEventListener('DOMContentLoaded', () => {
         return String(value || '').trim().toUpperCase();
     }
 
-    function isManagerPendingItem(row) {
+    function isManagerVisibleItem(row) {
         const stage = normalizeValue(row.approval_stage || row.stage);
         const status = normalizeValue(row.status);
-        if (stage === 'HR' || stage === 'FINAL') return false;
-        if (status === 'MANAGER_APPROVED' || status === 'HR_APPROVED' || status === 'APPROVED' || status === 'REJECTED' || status === 'AUTO_REJECTED') {
+        const assignedManagerEmail = String(
+            row.manager_email ||
+            row.managerEmail ||
+            (row.manager && row.manager.email) ||
+            ''
+        ).trim().toLowerCase();
+
+        // If backend includes manager assignment, restrict queue to logged-in manager only.
+        if (assignedManagerEmail && currentManagerEmail && assignedManagerEmail !== currentManagerEmail) {
             return false;
         }
-        if (stage === 'MANAGER' || stage === '') return status === '' || status === 'PENDING';
+        const visibleStatuses = new Set([
+            'PENDING',
+            'MANAGER_APPROVED',
+            'HR_APPROVED',
+            'APPROVED',
+            'REJECTED',
+            'AUTO_REJECTED'
+        ]);
+        if (status && visibleStatuses.has(status)) return true;
+        return stage === 'MANAGER' || stage === '';
+    }
+
+    function isManagerPendingItem(row) {
+        return normalizeValue(row.status) === 'PENDING' && (normalizeValue(row.approval_stage || row.stage) === 'MANAGER' || normalizeValue(row.approval_stage || row.stage) === '');
+    }
+
+    function statusBadgeClass(status) {
+        const key = normalizeValue(status);
+        if (key === 'APPROVED' || key === 'HR_APPROVED' || key === 'MANAGER_APPROVED') return 'approved';
+        if (key === 'REJECTED' || key === 'AUTO_REJECTED') return 'rejected';
+        return 'pending';
+    }
+
+    function statusLabel(status) {
+        const key = normalizeValue(status);
+        if (key === 'MANAGER_APPROVED') return 'MANAGER APPROVED';
+        if (key === 'HR_APPROVED') return 'HR APPROVED';
+        if (key === 'AUTO_REJECTED') return 'AUTO REJECTED';
+        return key || 'PENDING';
+    }
+
+    function safeText(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch]));
+    }
+
+    function isCalendarApprovedItem(row) {
+        const stage = normalizeValue(row.approval_stage || row.stage);
+        const status = normalizeValue(row.status);
+        if (!status) return true;
+        if (status === 'APPROVED') return true;
+        if (status === 'HR_APPROVED' && stage === 'FINAL') return true;
         return false;
     }
 
@@ -162,6 +218,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function statusClassFromType(eventType) {
             if (eventType === 'NEW_PENDING') return 'status-submitted';
+            if (eventType === 'STATUS_APPROVED' || eventType === 'STATUS_MANAGER_APPROVED' || eventType === 'STATUS_HR_APPROVED') return 'status-approved';
+            if (eventType === 'STATUS_REJECTED' || eventType === 'STATUS_AUTO_REJECTED') return 'status-rejected';
             if (eventType === 'REMOVED_FROM_QUEUE') return 'status-manager';
             return 'status-submitted';
         }
@@ -170,6 +228,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.event_type === 'NEW_PENDING') {
                 return `New leave request from ${item.employee_id || 'Employee'}`;
             }
+            if (item.event_type === 'STATUS_MANAGER_APPROVED') {
+                return `Manager approved request ${item.request_id} (waiting for HR)`;
+            }
+            if (item.event_type === 'STATUS_HR_APPROVED' || item.event_type === 'STATUS_APPROVED') {
+                return `Request ${item.request_id} finalized as approved`;
+            }
+            if (item.event_type === 'STATUS_REJECTED' || item.event_type === 'STATUS_AUTO_REJECTED') {
+                return `Request ${item.request_id} finalized as rejected`;
+            }
             if (item.event_type === 'REMOVED_FROM_QUEUE') {
                 return `Request ${item.request_id} removed from pending queue`;
             }
@@ -177,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function appendEvent(event) {
-            const id = `${event.request_id || 'req'}::${event.event_type || 'GEN'}`;
+            const id = event.event_id || `${event.request_id || 'req'}::${event.event_type || 'GEN'}`;
             if (managerNotificationItems.some((x) => itemId(x) === id)) return;
             managerNotificationItems.unshift({
                 ...event,
@@ -241,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="notification-meta">${(x.leave_type || '').toUpperCase()} | ${x.start_date || '-'} to ${x.end_date || '-'}</div>
                         <div class="notification-row">
                             <div class="notification-time">${relativeTime(x)}</div>
-                            <span class="notification-status ${statusClassFromType(x.event_type)}">${x.event_type === 'NEW_PENDING' ? 'Pending' : 'Updated'}</span>
+                            <span class="notification-status ${statusClassFromType(x.event_type)}">${x.event_type === 'NEW_PENDING' ? 'Pending' : 'Status update'}</span>
                         </div>
                     </div>
                     ${entry.unread ? '<span class="notification-dot"></span>' : ''}
@@ -260,6 +327,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        function statusToEventType(status) {
+            const s = normalizeValue(status);
+            if (s === 'MANAGER_APPROVED') return 'STATUS_MANAGER_APPROVED';
+            if (s === 'HR_APPROVED') return 'STATUS_HR_APPROVED';
+            if (s === 'APPROVED') return 'STATUS_APPROVED';
+            if (s === 'REJECTED') return 'STATUS_REJECTED';
+            if (s === 'AUTO_REJECTED') return 'STATUS_AUTO_REJECTED';
+            return '';
+        }
+
         function setPendingNotifications(rows) {
             const snapshot = loadJson(pendingSnapshotKey, {});
             const next = {};
@@ -268,9 +345,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!reqId) return;
                 next[reqId] = {
                     employee_id: r.employee_id || '',
+                    employee_email: r.employee_email || '',
                     leave_type: r.leave_type || '',
                     start_date: r.start_date || '',
-                    end_date: r.end_date || ''
+                    end_date: r.end_date || '',
+                    status: r.status || '',
+                    approval_stage: r.approval_stage || ''
                 };
             });
 
@@ -288,12 +368,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 managerNotificationState.initialized = true;
             } else {
                 nextIds.forEach((reqId) => {
+                    const prev = snapshot[reqId] || {};
+                    const curr = next[reqId] || {};
                     if (!prevIds.has(reqId)) {
                         appendEvent({
                             event_type: 'NEW_PENDING',
                             request_id: reqId,
                             ...next[reqId]
                         });
+                    } else if (normalizeValue(prev.status) !== normalizeValue(curr.status)) {
+                        const eventType = statusToEventType(curr.status);
+                        if (eventType) {
+                            appendEvent({
+                                event_type: eventType,
+                                event_id: `${reqId}::${eventType}::${Date.now()}`,
+                                request_id: reqId,
+                                ...curr
+                            });
+                        }
                     }
                 });
                 prevIds.forEach((reqId) => {
@@ -442,7 +534,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function dateInRange(day, start, end) {
-        return day.getTime() >= start.getTime() && day.getTime() <= end.getTime();
+        const dayOnly = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+        const startOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        const endOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+        return dayOnly.getTime() >= startOnly.getTime() && dayOnly.getTime() <= endOnly.getTime();
     }
 
     function buildMonthLeaveMap() {
@@ -483,6 +578,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const firstWeekday = new Date(activeMonth.getFullYear(), activeMonth.getMonth(), 1).getDay();
         const totalDays = new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 0).getDate();
         const leaveMap = buildMonthLeaveMap();
+        const currentMonthPrefix = `${activeMonth.getFullYear()}-${String(activeMonth.getMonth() + 1).padStart(2, '0')}-`;
+        if (!String(selectedDateKey || '').startsWith(currentMonthPrefix)) {
+            selectedDateKey = `${currentMonthPrefix}01`;
+        }
 
         for (let i = 0; i < firstWeekday; i += 1) {
             const empty = document.createElement('div');
@@ -501,6 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isWeekend) classes.push('weekend');
             if (leaveItems.length > 0) classes.push('has-leave');
             if (key === todayKey) classes.push('today');
+            if (key === selectedDateKey) classes.push('selected');
             cell.className = classes.join(' ');
 
             let html = `${dayNum}`;
@@ -514,8 +614,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             cell.innerHTML = html;
+            cell.dataset.dateKey = key;
+            cell.addEventListener('click', () => {
+                selectedDateKey = key;
+                renderCalendar();
+            });
             calendarGrid.appendChild(cell);
         }
+
+        renderSelectedDateDetails(leaveMap);
+    }
+
+    function renderSelectedDateDetails(leaveMap) {
+        const parent = calendarGrid?.parentElement;
+        if (!parent) return;
+
+        let details = document.getElementById('calendar-day-details');
+        if (!details) {
+            details = document.createElement('div');
+            details.id = 'calendar-day-details';
+            details.className = 'calendar-day-details';
+            parent.appendChild(details);
+        }
+
+        const items = leaveMap.get(selectedDateKey) || [];
+        if (!items.length) {
+            details.innerHTML = `<strong>${selectedDateKey}</strong>: No team members on approved leave.`;
+            return;
+        }
+
+        const unique = new Map();
+        items.forEach((x) => {
+            const key = String(x.employee_id || x.employee_email || x.request_id || '');
+            if (!unique.has(key)) unique.set(key, x);
+        });
+        const list = Array.from(unique.values())
+            .map((x) => `${x.employee_id || x.employee_email || 'Employee'} (${String(x.leave_type || 'leave').toLowerCase()})`)
+            .join(', ');
+        details.innerHTML = `<strong>${selectedDateKey}</strong>: ${list}`;
     }
 
     function updateCalendarStats() {
@@ -546,45 +682,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadPendingApprovals() {
         const list = document.getElementById('approval-list-container');
-        if (list) list.innerHTML = '<li style="padding:20px; text-align:center;">Loading pending approvals...</li>';
+        if (list) list.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center;">Loading approvals...</td></tr>';
 
         const response = await apiRequest('/leave/pending', 'GET');
         const rows = Array.isArray(response) ? response : (response.items || response.data || []);
-        const managerRows = rows.filter(isManagerPendingItem);
+        const managerRows = rows.filter(isManagerVisibleItem);
+        const pendingCount = managerRows.filter(isManagerPendingItem).length;
         if (typeof window.__setManagerPendingNotifications === 'function') {
             window.__setManagerPendingNotifications(managerRows);
         }
-        document.getElementById('stat-pending').textContent = String(managerRows.length);
+        document.getElementById('stat-pending').textContent = String(pendingCount);
 
         if (!list) return;
         list.innerHTML = '';
         if (!Array.isArray(managerRows) || managerRows.length === 0) {
-            list.innerHTML = '<li style="padding:20px; text-align:center;">No pending approvals.</li>';
+            list.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center;">No requests found.</td></tr>';
             return;
         }
 
         managerRows.forEach((req) => {
-            const li = document.createElement('li');
-            li.className = 'approval-item';
-            li.innerHTML = `
-                <div class="requester-info">
-                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(req.employee_id || 'User')}&background=0D8ABC&color=fff" alt="Avatar">
-                    <div>
-                        <h4>${req.employee_id || '-'}</h4>
-                        <p>${req.leave_type || '-'} (${req.total_days || 0} day${Number(req.total_days || 0) > 1 ? 's' : ''}) - ${req.start_date || '-'} to ${req.end_date || '-'}</p>
-                    </div>
-                </div>
-                <div class="action-buttons">
-                    <span style="font-size: 0.8rem; color: #64748b;">Approve/Reject via signed email link</span>
-                </div>
+            const status = statusLabel(req.status);
+            const badgeClass = statusBadgeClass(req.status);
+            const actionText = normalizeValue(req.status) === 'PENDING'
+                ? 'Approve/Reject via signed email link'
+                : (normalizeValue(req.status) === 'MANAGER_APPROVED'
+                    ? 'Waiting for HR approval'
+                    : 'Completed');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div><strong>${safeText(req.employee_id || '-')}</strong></div>
+                    <div class="text-muted" style="font-size:12px;">${safeText(req.employee_email || '')}</div>
+                </td>
+                <td><span class="type-indicator ${getTypeColor(req.leave_type)}"></span>${safeText((req.leave_type || '-').toLowerCase())}</td>
+                <td>${safeText(req.start_date || '-')} to ${safeText(req.end_date || '-')}</td>
+                <td>${safeText(req.created_at ? new Date(req.created_at).toLocaleDateString() : '-')}</td>
+                <td><span class="status-badge ${badgeClass}">${safeText(status)}</span></td>
+                <td>${safeText(actionText)}</td>
             `;
-            list.appendChild(li);
+            list.appendChild(tr);
         });
     }
 
     async function loadCalendarData() {
         const response = await apiRequest('/leave/calendar', 'GET');
-        calendarRows = Array.isArray(response) ? response : (response.items || response.data || []);
+        const rows = Array.isArray(response) ? response : (response.items || response.data || []);
+        calendarRows = rows.filter(isCalendarApprovedItem);
         renderCalendar();
         updateCalendarStats();
     }
@@ -599,10 +742,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function downloadReport(format) {
         const token = authStorage.get('idToken');
-        const response = await fetch(`${API_BASE_URL}/leave/report?format=${format}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error(`Failed to download ${format}`);
+        const url = `${API_BASE_URL}/leave/report?format=${format}`;
+        let response = null;
+        let fetchFailed = false;
+        try {
+            response = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (err) {
+            fetchFailed = true;
+            console.warn(`Report API fetch failed for ${format}:`, err);
+        }
+
+        // Fallback for environments where /leave/report is not deployed yet.
+        if ((fetchFailed || !response || !response.ok) && format === 'csv') {
+            const csv = buildCsvReportFromCalendar();
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const href = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = href;
+            link.download = `leave-report-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(href);
+            return;
+        }
+
+        if (fetchFailed || !response || !response.ok) {
+            if (format === 'pdf') {
+                throw new Error('PDF report endpoint is unavailable. Deploy /leave/report?format=pdf.');
+            }
+            throw new Error(`Failed to download ${format}`);
+        }
         const blob = await response.blob();
         const href = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -612,6 +784,25 @@ document.addEventListener('DOMContentLoaded', () => {
         link.click();
         link.remove();
         URL.revokeObjectURL(href);
+    }
+
+    function buildCsvReportFromCalendar() {
+        const headers = ['employee_id', 'leave_type', 'start_date', 'end_date', 'status', 'approval_stage', 'total_days'];
+        const rows = calendarRows.map((item) => ([
+            item.employee_id || '',
+            item.leave_type || '',
+            item.start_date || '',
+            item.end_date || '',
+            item.status || '',
+            item.approval_stage || '',
+            item.total_days || ''
+        ]));
+        const all = [headers, ...rows];
+        return all
+            .map((line) => line
+                .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+                .join(','))
+            .join('\n');
     }
 
     const refreshMs = 10000;
