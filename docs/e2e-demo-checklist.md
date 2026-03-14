@@ -17,7 +17,7 @@
 
 ## Manager Dashboard E2E (Model Alignment)
 1. Login as a `Manager` user.
-2. Open `manager.html`.
+2. Open `frontend/manager.html` in repo-based local testing, or `manager.html` after deploying the `frontend/` bundle to S3.
 3. Verify `Pending Approvals` list contains only manager-stage requests:
 - `approval_stage=MANAGER` (or blank) and `status=PENDING`.
 - No HR-stage request should be shown.
@@ -34,6 +34,6 @@
 
 ## Repo artifacts
 - DynamoDB schema: `infra/dynamodb-schema.md`
-- State machine definition: `infra/step-functions/leave-approval-state-machine.asl.json`
+- State machine definition: `infra/LeaveRequestStateMachine.asl.json`
 - Balance logic walkthrough: `docs/balance-logic-walkthrough.md`
 - Edge case report: `docs/edge-case-report.md`

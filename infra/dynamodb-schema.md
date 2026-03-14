@@ -1,54 +1,69 @@
 # DynamoDB Schema
 
+This is the delivery schema used by the deployed SmartLeave flow.
+
 ## 1) `leave_requests`
 - `PK`: `employee_id` (String)
-- `SK`: `request_id` (String, ULID/UUID)
-- Attributes:
-- `leave_type` (String: `SICK|CASUAL|EARNED|UNPAID`)
+- `SK`: `request_id` (String, UUID)
+
+Common attributes:
+- `request_id` (String)
+- `employee_id` (String)
+- `employee_email` (String)
+- `manager_email` (String)
+- `leave_type` (String: `sick|casual|earned|unpaid`)
 - `start_date` (String, `YYYY-MM-DD`)
 - `end_date` (String, `YYYY-MM-DD`)
 - `total_days` (Number)
 - `reason` (String)
-- `status` (String: `SUBMITTED|MANAGER_APPROVED|HR_APPROVED|APPROVED|REJECTED|AUTO_REJECTED`)
+- `status` (String: `PENDING|MANAGER_APPROVED|HR_APPROVED|APPROVED|REJECTED|AUTO_REJECTED`)
 - `approval_stage` (String: `MANAGER|HR|FINAL`)
-- `manager_id` (String)
-- `hr_admin_id` (String, optional)
-- `decision_reason` (String, optional)
 - `created_at` (String, ISO timestamp)
 - `updated_at` (String, ISO timestamp)
-- `expires_at` (Number, epoch seconds for TTL on stale pending requests, optional)
 
-Recommended GSIs:
-- `GSI1` (`status`, `created_at`) for pending queue.
-- `GSI2` (`manager_id`, `status`) for manager workload.
-- `GSI3` (`start_date`, `end_date`) for calendar/report windows.
+Notes:
+- Overlap detection is performed per `employee_id`.
+- Balance is decremented only when request reaches final approval (`APPROVED` via `FinalizeLeave`).
 
 ## 2) `leave_balances`
 - `PK`: `employee_id` (String)
-- `SK`: `leave_type#year` (String, e.g., `EARNED#2026`)
-- Attributes:
-- `leave_type` (String)
-- `year` (Number)
+- `SK`: `leave_type#year` (String, example `earned#2026`)
+
+Common attributes:
 - `total_quota` (Number)
+- `used_days` (Number)
 - `remaining_balance` (Number)
-- `carry_forward` (Number, optional)
-- `last_accrual_at` (String, ISO timestamp, optional)
 - `updated_at` (String, ISO timestamp)
+- `updated_by` (String, optional)
 
-Rule: balance decrement happens only at final approval state.
+Notes:
+- `unpaid` leave does not require quota deduction.
+- Quota updates are increment-based and capped by `leave_config`.
 
-## 3) `leave_type_config`
+## 3) `leave_config`
 - `PK`: `leave_type` (String)
-- `SK`: `config_version` (String; use `active`)
-- Attributes:
-- `display_name` (String)
-- `annual_quota` (Number)
-- `requires_balance` (Boolean)
-- `allow_carry_forward` (Boolean)
-- `max_continuous_days` (Number, optional)
-- `requires_hr_after_days` (Number; default `5`)
+- `SK`: `year` (String)
+
+Common attributes:
+- `annual_quota` or `quota` (Number)
+- `requires_balance` (Boolean; unpaid false)
+- `requires_hr_after_days` (Number, default `5`)
+- `weekly_accrual` (Number)
 - `is_active` (Boolean)
-- `updated_by` (String)
 - `updated_at` (String, ISO timestamp)
 
-No leave rules are hardcoded in Lambda; all leave-type behavior is read from this table.
+Notes:
+- Leave behavior is configuration-driven (no hardcoded type rules in UI/handlers).
+
+## 4) `employee_directory`
+- `PK`: `user_sub` (String, Cognito subject)
+
+Common attributes:
+- `employee_id` (String)
+- `email` / `email_lower` (String)
+- `role` (String: `Employee|Manager|HR_Admin`)
+- `manager_email` (String, optional)
+- `manager_employee_id` (String, required for manager team scoping)
+
+Notes:
+- Backend resolves identity and role from JWT + `employee_directory`.
